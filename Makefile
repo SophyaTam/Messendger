@@ -1,5 +1,11 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -pthread -I./include
+LDFLAGS = -lssl -lcrypto -lsqlite3
+
+COMMON_SRC = src/common/socket_utils.c src/common/protocol.c src/common/logger.c
+
+SERVER_SRC = src/server/server.c $(COMMON_SRC)
+CLIENT_SRC = src/client/client.c $(COMMON_SRC)
 
 SERVER_OUT = bin/server
 CLIENT_OUT = bin/client
@@ -11,11 +17,11 @@ all: bin $(SERVER_OUT) $(CLIENT_OUT)
 bin:
 	mkdir -p bin
 
-$(SERVER_OUT): src/server/server.c
-	$(CC) $(CFLAGS) $^ -o $@
+$(SERVER_OUT): $(SERVER_SRC)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-$(CLIENT_OUT): src/client/client.c
-	$(CC) $(CFLAGS) $^ -o $@
+$(CLIENT_OUT): $(CLIENT_SRC)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 clean:
 	rm -f bin/server bin/client

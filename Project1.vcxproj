@@ -103,6 +103,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <CompileAs>CompileAsC</CompileAs>
+      <AdditionalIncludeDirectories>$(ProjectDir)include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -125,12 +126,20 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="logger.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="protocol.c" />
+    <ClCompile Include="socket_utils.c" />
     <ClCompile Include="src\client\client.c" />
     <ClCompile Include="src\server\server.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Makefile" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="logger.h" />
+    <ClInclude Include="protocol.h" />
+    <ClInclude Include="socket_utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
