@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -pthread -I./include
 LDFLAGS = -lssl -lcrypto -lsqlite3
 
-COMMON_SRC = src/common/socket_utils.c src/common/protocol.c src/common/logger.c
+COMMON_SRC = src/common/socket_utils.c src/common/protocol.c src/common/logger.c src/common/auth.c
 
 SERVER_SRC = src/server/server.c $(COMMON_SRC)
 CLIENT_SRC = src/client/client.c $(COMMON_SRC)

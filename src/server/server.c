@@ -6,6 +6,8 @@
 #include <poll.h>
 #include "socket_utils.h"
 #include "logger.h"
+#include "auth.h"
+
 
 #define MAX_CLIENTS 10
 #define PORT 7777
@@ -28,6 +30,12 @@ int main() {
         return 1;
     }
     logger_write("SERVER STARTED");
+
+    /* Загрузка пользователей */
+    if (auth_init("data/passwd") < 0) {
+        logger_write("Failed to load passwd file");
+        return 1;
+    }
 
     /* Создание сокетов */
     int tcp_fd = create_server_socket(PORT);
@@ -99,7 +107,7 @@ int main() {
                 }
             }
             else {
-                /* Данные от клиента — пока просто эхо */
+                /* Данные от клиента */
                 char buffer[1024];
                 int client_fd = fds[i].fd;
                 int received = receive_message(client_fd, buffer, sizeof(buffer));
@@ -108,7 +116,6 @@ int main() {
                     /* Отключение клиента */
                     logger_write("Client disconnected (fd=%d)", client_fd);
                     close_socket(client_fd);
-                    /* Удалить из массива */
                     for (int j = 0; j < client_count; j++) {
                         if (clients[j].fd == client_fd) {
                             clients[j] = clients[client_count - 1];
@@ -118,11 +125,45 @@ int main() {
                     }
                 }
                 else {
-                    printf("[SERVER] Received: %s", buffer);
-                    /* Эхо-ответ */
-                    send_message(client_fd, "ECHO: ");
-                    send_message(client_fd, buffer);
-                    logger_write("Message echoed (fd=%d)", client_fd);
+                    /* Убрать \n */
+                    buffer[strcspn(buffer, "\n")] = '\0';
+
+                    printf("[SERVER] Received: %s\n", buffer);
+
+                    /* --- Обработка команды LOGIN --- */
+                    if (strncmp(buffer, "LOGIN ", 6) == 0) {
+                        char username[32], password[32];
+                        if (sscanf(buffer + 6, "%31s %31s", username, password) == 2) {
+                            int result = auth_check(username, password);
+                            if (result == 1) {
+                                /* Успех — сохраняем имя */
+                                for (int j = 0; j < client_count; j++) {
+                                    if (clients[j].fd == client_fd) {
+                                        strncpy(clients[j].username, username, sizeof(clients[j].username) - 1);
+                                        break;
+                                    }
+                                }
+                                send_message(client_fd, "OK\n");
+                                logger_write("User %s logged in (fd=%d)", username, client_fd);
+                            }
+                            else if (result == 0) {
+                                send_message(client_fd, "ERROR Wrong password\n");
+                                logger_write("Failed login for %s (wrong password)", username);
+                            }
+                            else {
+                                send_message(client_fd, "ERROR User not found\n");
+                                logger_write("Failed login for %s (not found)", username);
+                            }
+                        }
+                        else {
+                            send_message(client_fd, "ERROR Invalid format. Use: LOGIN username password\n");
+                        }
+                    }
+                    /* --- Неизвестная команда --- */
+                    else {
+                        send_message(client_fd, "UNKNOWN Unknown command\n");
+                        logger_write("Unknown command from fd=%d: %s", client_fd, buffer);
+                    }
                 }
             }
         }
@@ -139,5 +180,6 @@ int main() {
     logger_close();
 
     printf("[SERVER] Done.\n");
+    auth_cleanup();
     return 0;
 }
