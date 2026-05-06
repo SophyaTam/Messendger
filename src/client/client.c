@@ -6,10 +6,11 @@
 
 static int server_fd;  /* Сокет сервера (общий для обоих потоков) */
 
-/* Поток-приёмник: слушает сервер и выводит сообщения */
 void* receiver_thread(void* arg) {
     (void)arg;
     char buffer[1024];
+    int in_history = 0;
+
     while (1) {
         int received = receive_message(server_fd, buffer, sizeof(buffer));
         if (received <= 0) {
@@ -17,12 +18,48 @@ void* receiver_thread(void* arg) {
             exit(0);
         }
         buffer[strcspn(buffer, "\n")] = '\0';
-        printf("\r[Сервер] %s\n> ", buffer);
-        fflush(stdout);
+
+        if (strlen(buffer) == 0) continue;
+
+        if (strcmp(buffer, "HISTORY_BEGIN") == 0) {
+            in_history = 1;
+            printf("\n=== История переписки ===\n");
+        }
+        else if (strcmp(buffer, "HISTORY_END") == 0) {
+            in_history = 0;
+            printf("=== Конец истории ===\n> ");
+            fflush(stdout);
+        }
+        else if (strcmp(buffer, "HISTORY_EMPTY") == 0) {
+            printf("\n(История пуста)\n> ");
+            fflush(stdout);
+        }
+        else if (in_history) {
+            printf("%s\n", buffer);
+        }
+        else if (strncmp(buffer, "[От ", 4) == 0) {
+            printf("\r\033[K%s\n> ", buffer);
+            fflush(stdout);
+        }
+        else if (strncmp(buffer, "LIST ", 5) == 0) {
+            printf("\r\033[KОнлайн: %s\n> ", buffer + 5);
+            fflush(stdout);
+        }
+        else if (strncmp(buffer, "OK", 2) == 0) {
+            printf("\r\033[K[OK]\n> ");
+            fflush(stdout);
+        }
+        else if (strncmp(buffer, "ERROR", 5) == 0) {
+            printf("\r\033[K[Ошибка] %s\n> ", buffer + 6);
+            fflush(stdout);
+        }
+        else {
+            printf("\r\033[K[Сервер] %s\n> ", buffer);
+            fflush(stdout);
+        }
     }
     return NULL;
 }
-
 int main() {
     printf("[CLIENT] Connecting...\n");
     server_fd = connect_to_server("127.0.0.1", 7777);
@@ -94,6 +131,13 @@ int main() {
             printf("  /list           — список онлайн-пользователей\n");
             printf("  /quit           — выйти\n");
             printf("  /help           — эта справка\n");
+            printf("  /history Имя    — показать историю переписки\n");
+        }
+        /* /history user */
+        else if (strncmp(input, "/history ", 9) == 0) {
+            char hist_cmd[64];
+            snprintf(hist_cmd, sizeof(hist_cmd), "HISTORY %s\n", input + 9);
+            send_message(server_fd, hist_cmd);
         }
         else {
             printf("Неизвестная команда. /help для справки.\n");

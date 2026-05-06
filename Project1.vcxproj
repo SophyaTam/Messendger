@@ -127,6 +127,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="auth.c" />
+    <ClCompile Include="history.c" />
     <ClCompile Include="logger.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="protocol.c" />
@@ -139,6 +140,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="auth.h" />
+    <ClInclude Include="history.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="protocol.h" />
     <ClInclude Include="socket_utils.h" />

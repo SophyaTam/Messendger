@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "auth.h"
 #include "protocol.h"
+#include "history.h"
 
 #define MAX_CLIENTS 10
 #define PORT 7777
@@ -33,6 +34,10 @@ int main() {
     if (auth_init("data/passwd") < 0) {
         logger_write("Failed to load passwd file");
         return 1;
+    }
+
+    if (history_init("data/messages.log") < 0) {
+        logger_write("Failed to init history file");
     }
 
     int tcp_fd = create_server_socket(PORT);
@@ -166,19 +171,16 @@ int main() {
                     }
                     /* --- SEND --- */
                     else if (strncmp(buffer, "SEND ", 5) == 0) {
-                        /* Проверить, авторизован ли отправитель */
                         if (!clients[client_idx].logged_in) {
                             send_message(client_fd, "ERROR Please login first\n");
                         }
                         else {
                             char recipient[32], message[1024];
                             if (protocol_parse_send(buffer, recipient, message) == 0) {
-                                /* Найти получателя */
                                 int found = 0;
                                 for (int j = 0; j < client_count; j++) {
                                     if (clients[j].logged_in &&
                                         strcmp(clients[j].username, recipient) == 0) {
-                                        /* Переслать сообщение */
                                         char forward[1280];
                                         snprintf(forward, sizeof(forward),
                                             "[От %s] %s\n",
@@ -193,6 +195,8 @@ int main() {
                                     logger_write("Message from %s to %s: %s",
                                         clients[client_idx].username,
                                         recipient, message);
+                                    history_save(clients[client_idx].username,
+                                        recipient, message);
                                 }
                                 else {
                                     send_message(client_fd, "ERROR User offline\n");
@@ -203,6 +207,8 @@ int main() {
                             }
                         }
                     }
+                    
+
                     /* --- EXIT --- */
                     else if (strncmp(buffer, "EXIT", 4) == 0) {
                         send_message(client_fd, "BYE\n");
@@ -211,6 +217,37 @@ int main() {
                         close_socket(client_fd);
                         clients[client_idx] = clients[client_count - 1];
                         client_count--;
+                    }
+                    /* --- HISTORY --- */
+                    else if (strncmp(buffer, "HISTORY ", 8) == 0) {
+                        if (!clients[client_idx].logged_in) {
+                            send_message(client_fd, "ERROR Please login first\n");
+                        }
+                        else {
+                            char other_user[32];
+                            if (sscanf(buffer + 8, "%31s", other_user) == 1) {
+                                char* hist = history_get(clients[client_idx].username,
+                                    other_user);
+                                if (hist && strlen(hist) > 0) {
+                                    /* Отправляем историю — каждая строка отдельно */
+                                    send_message(client_fd, "HISTORY_BEGIN\n");
+
+                                    /* Разбиваем историю на строки и отправляем */
+                                    char* line = strtok(hist, "\n");
+                                    while (line) {
+                                        send_message(client_fd, line);
+                                        send_message(client_fd, "\n");
+                                        line = strtok(NULL, "\n");
+                                    }
+                                    send_message(client_fd, "HISTORY_END\n");
+                                    free(hist);
+                                }
+                                else {
+                                    send_message(client_fd, "HISTORY_EMPTY\n");
+                                    if (hist) free(hist);
+                                }
+                            }
+                        }
                     }
                     /* --- Неизвестная команда --- */
                     else {
@@ -233,5 +270,7 @@ int main() {
     logger_close();
 
     printf("[SERVER] Done.\n");
+    history_close();
+
     return 0;
 }

@@ -33,6 +33,12 @@
     <ClCompile Include="logger.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="auth.c">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="history.c">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Makefile" />
@@ -46,6 +52,12 @@
     </ClInclude>
     <ClInclude Include="logger.h">
       <Filter>Исходные файлы</Filter>
+    </ClInclude>
+    <ClInclude Include="auth.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="history.h">
+      <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
