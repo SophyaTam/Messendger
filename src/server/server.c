@@ -36,7 +36,9 @@ int main() {
         return 1;
     }
 
-    if (history_init("data/messages.log") < 0) {
+    int hist_ret = history_init("data/messenger.db");
+    printf("[DEBUG] history_init returned: %d\n", hist_ret);
+    if (hist_ret < 0) {
         logger_write("Failed to init history file");
     }
 

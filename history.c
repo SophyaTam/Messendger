@@ -3,111 +3,118 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sqlite3.h>
 
-static FILE* history_file = NULL;
+static sqlite3* db = NULL;
 
-int history_init(const char* filename) {
-    history_file = fopen(filename, "a");
-    if (!history_file) {
-        perror("history_init");
+int history_init(const char* db_filename) {
+    int rc = sqlite3_open(db_filename, &db);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
         return -1;
     }
+
+    /* Создать таблицу, если её нет */
+    const char* sql =
+        "CREATE TABLE IF NOT EXISTS messages ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  sender TEXT NOT NULL,"
+        "  receiver TEXT NOT NULL,"
+        "  message TEXT NOT NULL,"
+        "  timestamp TEXT NOT NULL"
+        ");";
+
+    char* err = NULL;
+    rc = sqlite3_exec(db, sql, NULL, NULL, &err);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", err);
+        sqlite3_free(err);
+        return -1;
+    }
+
+    printf("[HISTORY] Database initialized: %s\n", db_filename);
     return 0;
 }
 
 void history_save(const char* sender, const char* receiver, const char* message) {
-    if (!history_file) return;
+    if (!db) return;
 
+    /* Временная метка */
     time_t now = time(NULL);
     struct tm* t = localtime(&now);
     char time_str[64];
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", t);
 
-    /* Формат: время | отправитель | получатель | сообщение */
-    fprintf(history_file, "%s | %s | %s | %s\n", time_str, sender, receiver, message);
-    fflush(history_file);
+    const char* sql = "INSERT INTO messages (sender, receiver, message, timestamp) "
+        "VALUES (?, ?, ?, ?);";
+    sqlite3_stmt* stmt;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        fprintf(stderr, "Prepare error: %s\n", sqlite3_errmsg(db));
+        return;
+    }
+
+    sqlite3_bind_text(stmt, 1, sender, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, receiver, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, message, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, time_str, -1, SQLITE_STATIC);
+
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        fprintf(stderr, "Insert error: %s\n", sqlite3_errmsg(db));
+    }
+
+    sqlite3_finalize(stmt);
 }
 
 char* history_get(const char* user1, const char* user2) {
-    FILE* f = fopen("data/messages.log", "r");
-    if (!f) return NULL;
+    if (!db) return NULL;
 
+    const char* sql =
+        "SELECT sender, message, timestamp FROM messages "
+        "WHERE (sender = ? AND receiver = ?) "
+        "   OR (sender = ? AND receiver = ?) "
+        "ORDER BY id ASC;";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        fprintf(stderr, "Prepare error: %s\n", sqlite3_errmsg(db));
+        return NULL;
+    }
+
+    sqlite3_bind_text(stmt, 1, user1, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, user2, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, user2, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, user1, -1, SQLITE_STATIC);
+
+    /* Собираем результат */
     char* result = malloc(4096);
     if (!result) {
-        fclose(f);
+        sqlite3_finalize(stmt);
         return NULL;
     }
     result[0] = '\0';
 
-    char line[1024];
-    while (fgets(line, sizeof(line), f)) {
-        line[strcspn(line, "\n")] = '\0';
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char* sender = (const char*)sqlite3_column_text(stmt, 0);
+        const char* message = (const char*)sqlite3_column_text(stmt, 1);
+        const char* timestamp = (const char*)sqlite3_column_text(stmt, 2);
 
-        char time_str[64], sender[32], receiver[32], message[900];
+        char line[1024];
+        snprintf(line, sizeof(line), "[%s] %s: %s\n", timestamp, sender, message);
 
-        /* Ручной парсинг вместо sscanf */
-        char* p = line;
-
-        /* Читаем время (до первого |) */
-        char* sep = strstr(p, " | ");
-        if (!sep) continue;
-        *sep = '\0';
-        strncpy(time_str, p, sizeof(time_str) - 1);
-        p = sep + 3;
-        while (*p == ' ') p++;
-
-        /* Читаем отправителя (до второго |) */
-        sep = strstr(p, " | ");
-        if (!sep) continue;
-        *sep = '\0';
-        strncpy(sender, p, sizeof(sender) - 1);
-        p = sep + 3;
-        while (*p == ' ') p++;
-
-        /* Читаем получателя (до третьего |) */
-        sep = strstr(p, " | ");
-        if (!sep) continue;
-        *sep = '\0';
-        strncpy(receiver, p, sizeof(receiver) - 1);
-        p = sep + 3;
-        while (*p == ' ') p++;
-
-        /* Остальное — сообщение */
-        strncpy(message, p, sizeof(message) - 1);
-
-        /* Обрезаем пробелы в конце sender и receiver */
-        char* e = sender + strlen(sender) - 1;
-        while (e >= sender && *e == ' ') { *e = '\0'; e--; }
-        e = receiver + strlen(receiver) - 1;
-        while (e >= receiver && *e == ' ') { *e = '\0'; e--; }
-
-        /* Проверяем: сообщение между user1 и user2? */
-        if ((strcmp(sender, user1) == 0 && strcmp(receiver, user2) == 0) ||
-            (strcmp(sender, user2) == 0 && strcmp(receiver, user1) == 0)) {
-
-            if (strlen(result) + strlen(line) < 4000) {
-                strcat(result, "[");
-                strcat(result, time_str);
-                strcat(result, "] ");
-                strcat(result, sender);
-                strcat(result, ": ");
-                strcat(result, message);
-                strcat(result, "\n");
-            }
+        if (strlen(result) + strlen(line) < 4000) {
+            strcat(result, line);
         }
     }
-    printf("[HISTORY DEBUG] Result length: %zu\n", strlen(result));
-    printf("[HISTORY DEBUG] Result: '%s'\n", result);
 
-    fclose(f);
-
-    fclose(f);
+    sqlite3_finalize(stmt);
     return result;
 }
 
 void history_close(void) {
-    if (history_file) {
-        fclose(history_file);
-        history_file = NULL;
+    if (db) {
+        sqlite3_close(db);
+        db = NULL;
+        printf("[HISTORY] Database closed\n");
     }
 }
