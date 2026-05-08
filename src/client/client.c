@@ -3,8 +3,9 @@
 #include <string.h>
 #include <pthread.h>
 #include "socket_utils.h"
+#include "crypto.h"
 
-static int server_fd;  /* Сокет сервера (общий для обоих потоков) */
+static int server_fd;
 
 void* receiver_thread(void* arg) {
     (void)arg;
@@ -19,30 +20,40 @@ void* receiver_thread(void* arg) {
         }
         buffer[strcspn(buffer, "\n")] = '\0';
 
+        /* Р Р°СЃС€РёС„СЂРѕРІР°С‚СЊ, РµСЃР»Рё Р·Р°С€РёС„СЂРѕРІР°РЅРѕ */
+        if (strncmp(buffer, "ENC:", 4) == 0) {
+            char* decrypted = crypto_decrypt(buffer + 4);
+            if (decrypted) {
+                strncpy(buffer, decrypted, sizeof(buffer) - 1);
+                buffer[sizeof(buffer) - 1] = '\0';
+                free(decrypted);
+            }
+        }
+
         if (strlen(buffer) == 0) continue;
 
         if (strcmp(buffer, "HISTORY_BEGIN") == 0) {
             in_history = 1;
-            printf("\n=== История переписки ===\n");
+            printf("\n=== РСЃС‚РѕСЂРёСЏ РїРµСЂРµРїРёСЃРєРё ===\n");
         }
         else if (strcmp(buffer, "HISTORY_END") == 0) {
             in_history = 0;
-            printf("=== Конец истории ===\n> ");
+            printf("=== РљРѕРЅРµС† РёСЃС‚РѕСЂРёРё ===\n> ");
             fflush(stdout);
         }
         else if (strcmp(buffer, "HISTORY_EMPTY") == 0) {
-            printf("\n(История пуста)\n> ");
+            printf("\n(РСЃС‚РѕСЂРёСЏ РїСѓСЃС‚Р°)\n> ");
             fflush(stdout);
         }
         else if (in_history) {
             printf("%s\n", buffer);
         }
-        else if (strncmp(buffer, "[От ", 4) == 0) {
+        else if (strncmp(buffer, "[РћС‚ ", 4) == 0) {
             printf("\r\033[K%s\n> ", buffer);
             fflush(stdout);
         }
         else if (strncmp(buffer, "LIST ", 5) == 0) {
-            printf("\r\033[KОнлайн: %s\n> ", buffer + 5);
+            printf("\r\033[KРћРЅР»Р°Р№РЅ: %s\n> ", buffer + 5);
             fflush(stdout);
         }
         else if (strncmp(buffer, "OK", 2) == 0) {
@@ -50,16 +61,17 @@ void* receiver_thread(void* arg) {
             fflush(stdout);
         }
         else if (strncmp(buffer, "ERROR", 5) == 0) {
-            printf("\r\033[K[Ошибка] %s\n> ", buffer + 6);
+            printf("\r\033[K[РћС€РёР±РєР°] %s\n> ", buffer + 6);
             fflush(stdout);
         }
         else {
-            printf("\r\033[K[Сервер] %s\n> ", buffer);
+            printf("\r\033[K[РЎРµСЂРІРµСЂ] %s\n> ", buffer);
             fflush(stdout);
         }
     }
     return NULL;
 }
+
 int main() {
     printf("[CLIENT] Connecting...\n");
     server_fd = connect_to_server("127.0.0.1", 7777);
@@ -68,7 +80,9 @@ int main() {
         return 1;
     }
 
-    /* --- Аутентификация --- */
+    crypto_init("messenger2026key");
+
+    /* --- РђСѓС‚РµРЅС‚РёС„РёРєР°С†РёСЏ --- */
     char username[32], password[32];
     printf("Login: ");
     fgets(username, sizeof(username), stdin);
@@ -86,19 +100,19 @@ int main() {
     int received = receive_message(server_fd, response, sizeof(response));
     if (received > 0) {
         response[strcspn(response, "\n")] = '\0';
-        printf("[Сервер] %s\n", response);
+        printf("[РЎРµСЂРІРµСЂ] %s\n", response);
         if (strncmp(response, "OK", 2) != 0) {
             close_socket(server_fd);
             return 1;
         }
     }
 
-    /* --- Запуск потока-приёмника --- */
+    /* --- Р—Р°РїСѓСЃРє РїРѕС‚РѕРєР°-РїСЂРёС‘РјРЅРёРєР° --- */
     pthread_t recv_thread;
     pthread_create(&recv_thread, NULL, receiver_thread, NULL);
 
-    /* --- Основной цикл: ввод команд --- */
-    printf("\nКоманды: /msg Имя Текст | /list | /quit | /help\n");
+    /* --- РћСЃРЅРѕРІРЅРѕР№ С†РёРєР»: РІРІРѕРґ РєРѕРјР°РЅРґ --- */
+    printf("\nРљРѕРјР°РЅРґС‹: /msg РРјСЏ РўРµРєСЃС‚ | /list | /quit | /help | /history РРјСЏ\n");
     char input[1024];
     while (1) {
         printf("> ");
@@ -108,7 +122,7 @@ int main() {
 
         if (strlen(input) == 0) continue;
 
-        /* /quit или /exit */
+        /* /quit РёР»Рё /exit */
         if (strcmp(input, "/quit") == 0 || strcmp(input, "/exit") == 0) {
             send_message(server_fd, "EXIT\n");
             break;
@@ -119,19 +133,31 @@ int main() {
         }
         /* /msg user text */
         else if (strncmp(input, "/msg ", 5) == 0) {
-            /* Отправляем как SEND user text */
-            char send_cmd[1280];
-            snprintf(send_cmd, sizeof(send_cmd), "SEND %s\n", input + 5);
-            send_message(server_fd, send_cmd);
+            char* rest = input + 5;
+            char* space = strchr(rest, ' ');
+            if (space) {
+                *space = '\0';
+                char* recipient = rest;
+                char* text = space + 1;
+
+                char* enc_text = crypto_encrypt(text);
+                if (enc_text) {
+                    char send_cmd[1280];
+                    snprintf(send_cmd, sizeof(send_cmd),
+                        "ENC:SEND %s %s\n", recipient, enc_text);
+                    send_message(server_fd, send_cmd);
+                    free(enc_text);
+                }
+            }
         }
         /* /help */
         else if (strcmp(input, "/help") == 0) {
-            printf("Команды:\n");
-            printf("  /msg Имя Текст — отправить личное сообщение\n");
-            printf("  /list           — список онлайн-пользователей\n");
-            printf("  /quit           — выйти\n");
-            printf("  /help           — эта справка\n");
-            printf("  /history Имя    — показать историю переписки\n");
+            printf("РљРѕРјР°РЅРґС‹:\n");
+            printf("  /msg РРјСЏ РўРµРєСЃС‚ вЂ” РѕС‚РїСЂР°РІРёС‚СЊ Р»РёС‡РЅРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ\n");
+            printf("  /list           вЂ” СЃРїРёСЃРѕРє РѕРЅР»Р°Р№РЅ-РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№\n");
+            printf("  /quit           вЂ” РІС‹Р№С‚Рё\n");
+            printf("  /help           вЂ” СЌС‚Р° СЃРїСЂР°РІРєР°\n");
+            printf("  /history РРјСЏ    вЂ” РїРѕРєР°Р·Р°С‚СЊ РёСЃС‚РѕСЂРёСЋ РїРµСЂРµРїРёСЃРєРё\n");
         }
         /* /history user */
         else if (strncmp(input, "/history ", 9) == 0) {
@@ -140,7 +166,7 @@ int main() {
             send_message(server_fd, hist_cmd);
         }
         else {
-            printf("Неизвестная команда. /help для справки.\n");
+            printf("РќРµРёР·РІРµСЃС‚РЅР°СЏ РєРѕРјР°РЅРґР°. /help РґР»СЏ СЃРїСЂР°РІРєРё.\n");
         }
     }
 

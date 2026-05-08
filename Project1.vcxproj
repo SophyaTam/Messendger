@@ -127,6 +127,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="auth.c" />
+    <ClCompile Include="crypto.c" />
     <ClCompile Include="history.c" />
     <ClCompile Include="logger.c" />
     <ClCompile Include="main.c" />
@@ -140,6 +141,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="auth.h" />
+    <ClInclude Include="crypto.h" />
     <ClInclude Include="history.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="protocol.h" />
