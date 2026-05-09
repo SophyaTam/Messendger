@@ -236,7 +236,7 @@ int main() {
                                     strcmp(clients[j].username, recipient) == 0) {
                                     char plain_forward[1280];
                                     snprintf(plain_forward, sizeof(plain_forward),
-                                        "[ŒÚ %s] %s",
+                                        "[–û—Ç %s] %s",
                                         clients[client_idx].username, message);
                                     char* encrypted_forward = crypto_encrypt(plain_forward);
                                     if (encrypted_forward) {
@@ -388,7 +388,7 @@ int main() {
                                             if (clients[j].logged_in && strcmp(clients[j].username, token) == 0) {
                                                 char group_msg[1280];
                                                 snprintf(group_msg, sizeof(group_msg),
-                                                    "[√ÛÔÔ‡ %s | %s] %s",
+                                                    "[–ì—Ä—É–ø–ø–∞ %s | %s] %s",
                                                     group_name, clients[client_idx].username, message);
                                                 char* enc = crypto_encrypt(group_msg);
                                                 if (enc) {
@@ -441,3 +441,4 @@ int main() {
     printf("[SERVER] Done.\n");
     return 0;
 }
+

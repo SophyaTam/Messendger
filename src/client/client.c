@@ -63,6 +63,9 @@ void* receiver_thread(void* arg) {
             printf("\r\033[K[Ошибка] %s\n> ", buffer + 6);
             fflush(stdout);
         }
+        else if (strncmp(buffer, "UNKNOWN", 7) == 0) {
+            /* Игнорируем UNKNOWN */
+        }
         else {
             printf("\r\033[K[Сервер] %s\n> ", buffer);
             fflush(stdout);
