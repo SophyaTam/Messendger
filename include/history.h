@@ -1,6 +1,8 @@
 #ifndef HISTORY_H
 #define HISTORY_H
 
+#include <sqlite3.h>
+
 /* Инициализировать хранилище истории */
 int history_init(const char* filename);
 
@@ -13,5 +15,7 @@ char* history_get(const char* user1, const char* user2);
 
 /* Закрыть хранилище */
 void history_close(void);
+
+sqlite3* history_get_db(void);
 
 #endif

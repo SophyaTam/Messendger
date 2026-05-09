@@ -20,7 +20,6 @@ void* receiver_thread(void* arg) {
         }
         buffer[strcspn(buffer, "\n")] = '\0';
 
-        /* Расшифровать, если зашифровано */
         if (strncmp(buffer, "ENC:", 4) == 0) {
             char* decrypted = crypto_decrypt(buffer + 4);
             if (decrypted) {
@@ -48,7 +47,7 @@ void* receiver_thread(void* arg) {
         else if (in_history) {
             printf("%s\n", buffer);
         }
-        else if (strncmp(buffer, "[От ", 4) == 0) {
+        else if (strncmp(buffer, "[От ", 4) == 0 || strncmp(buffer, "[Группа ", 8) == 0) {
             printf("\r\033[K%s\n> ", buffer);
             fflush(stdout);
         }
@@ -56,8 +55,8 @@ void* receiver_thread(void* arg) {
             printf("\r\033[KОнлайн: %s\n> ", buffer + 5);
             fflush(stdout);
         }
-        else if (strncmp(buffer, "OK", 2) == 0) {
-            printf("\r\033[K[OK]\n> ");
+        else if (strncmp(buffer, "OK", 2) == 0 || strncmp(buffer, "GROUP_CREATED", 13) == 0 || strncmp(buffer, "GROUP_JOINED", 12) == 0) {
+            printf("\r\033[K[OK] %s\n> ", buffer);
             fflush(stdout);
         }
         else if (strncmp(buffer, "ERROR", 5) == 0) {
@@ -82,12 +81,10 @@ int main() {
 
     crypto_init("messenger2026key");
 
-    /* --- Аутентификация --- */
     char username[32], password[32];
     printf("Login: ");
     fgets(username, sizeof(username), stdin);
     username[strcspn(username, "\n")] = '\0';
-
     printf("Password: ");
     fgets(password, sizeof(password), stdin);
     password[strcspn(password, "\n")] = '\0';
@@ -107,31 +104,27 @@ int main() {
         }
     }
 
-    /* --- Запуск потока-приёмника --- */
     pthread_t recv_thread;
     pthread_create(&recv_thread, NULL, receiver_thread, NULL);
 
-    /* --- Основной цикл: ввод команд --- */
     printf("\nКоманды: /msg Имя Текст | /list | /quit | /help | /history Имя\n");
+    printf("  /group create Имя Пароль | /group join Имя Пароль | /group msg Имя Текст\n");
+
     char input[1024];
     while (1) {
         printf("> ");
         fflush(stdout);
         if (!fgets(input, sizeof(input), stdin)) break;
         input[strcspn(input, "\n")] = '\0';
-
         if (strlen(input) == 0) continue;
 
-        /* /quit или /exit */
         if (strcmp(input, "/quit") == 0 || strcmp(input, "/exit") == 0) {
             send_message(server_fd, "EXIT\n");
             break;
         }
-        /* /list */
         else if (strcmp(input, "/list") == 0) {
             send_message(server_fd, "LIST\n");
         }
-        /* /msg user text */
         else if (strncmp(input, "/msg ", 5) == 0) {
             char* rest = input + 5;
             char* space = strchr(rest, ' ');
@@ -139,18 +132,15 @@ int main() {
                 *space = '\0';
                 char* recipient = rest;
                 char* text = space + 1;
-
                 char* enc_text = crypto_encrypt(text);
                 if (enc_text) {
                     char send_cmd[1280];
-                    snprintf(send_cmd, sizeof(send_cmd),
-                        "ENC:SEND %s %s\n", recipient, enc_text);
+                    snprintf(send_cmd, sizeof(send_cmd), "ENC:SEND %s %s\n", recipient, enc_text);
                     send_message(server_fd, send_cmd);
                     free(enc_text);
                 }
             }
         }
-        /* /help */
         else if (strcmp(input, "/help") == 0) {
             printf("Команды:\n");
             printf("  /msg Имя Текст — отправить личное сообщение\n");
@@ -158,12 +148,40 @@ int main() {
             printf("  /quit           — выйти\n");
             printf("  /help           — эта справка\n");
             printf("  /history Имя    — показать историю переписки\n");
+            printf("  /group create Имя Пароль  — создать группу с паролем\n");
+            printf("  /group join Имя Пароль     — войти в группу\n");
+            printf("  /group msg Имя Текст       — сообщение в группу\n");
         }
-        /* /history user */
         else if (strncmp(input, "/history ", 9) == 0) {
             char hist_cmd[64];
             snprintf(hist_cmd, sizeof(hist_cmd), "HISTORY %s\n", input + 9);
             send_message(server_fd, hist_cmd);
+        }
+        else if (strncmp(input, "/group create ", 14) == 0) {
+            char cmd[128];
+            snprintf(cmd, sizeof(cmd), "GROUP_CREATE %s\n", input + 14);
+            send_message(server_fd, cmd);
+        }
+        else if (strncmp(input, "/group join ", 12) == 0) {
+            char cmd[128];
+            snprintf(cmd, sizeof(cmd), "GROUP_JOIN %s\n", input + 12);
+            send_message(server_fd, cmd);
+        }
+        else if (strncmp(input, "/group msg ", 11) == 0) {
+            char* rest = input + 11;
+            char* space = strchr(rest, ' ');
+            if (space) {
+                *space = '\0';
+                char* group_name = rest;
+                char* text = space + 1;
+                char* enc_text = crypto_encrypt(text);
+                if (enc_text) {
+                    char send_cmd[1280];
+                    snprintf(send_cmd, sizeof(send_cmd), "ENC:GROUP_MSG %s %s\n", group_name, enc_text);
+                    send_message(server_fd, send_cmd);
+                    free(enc_text);
+                }
+            }
         }
         else {
             printf("Неизвестная команда. /help для справки.\n");

@@ -115,3 +115,7 @@ void history_close(void) {
         printf("[HISTORY] Database closed\n");
     }
 }
+
+sqlite3* history_get_db(void) {
+    return db;
+}
