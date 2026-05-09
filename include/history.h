@@ -10,7 +10,6 @@ int history_init(const char* filename);
 void history_save(const char* sender, const char* receiver, const char* message);
 
 /* «апросить историю между двум€ пользовател€ми */
-/* ¬озвращает строку Ч нужно будет освободить через free() */
 char* history_get(const char* user1, const char* user2);
 
 /* «акрыть хранилище */
@@ -18,4 +17,5 @@ void history_close(void);
 
 sqlite3* history_get_db(void);
 
+void history_log_event(const char* type, const char* username, const char* data);
 #endif

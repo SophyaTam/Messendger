@@ -32,6 +32,7 @@ int main() {
         return 1;
     }
     logger_write("SERVER STARTED");
+    history_log_event("SERVER_START", NULL, NULL);
 
     if (auth_init("data/passwd") < 0) {
         logger_write("Failed to load passwd file");
@@ -126,6 +127,9 @@ int main() {
                 }
 
                 if (received <= 0) {
+                    if (client_idx >= 0 && clients[client_idx].username[0] != '\0') {
+                        history_log_event("USER_LOGOUT", clients[client_idx].username, NULL);
+                    }
                     logger_write("Client disconnected (fd=%d)", client_fd);
                     close_socket(client_fd);
                     if (client_idx >= 0) {
@@ -179,6 +183,7 @@ int main() {
                             clients[client_idx].logged_in = 1;
                             send_message(client_fd, "OK\n");
                             logger_write("User %s logged in (fd=%d)", username, client_fd);
+                            history_log_event("USER_LOGIN", username, NULL);
                         }
                         else if (result == 0) {
                             send_message(client_fd, "ERROR Wrong password\n");
@@ -189,25 +194,6 @@ int main() {
                     }
                     else {
                         send_message(client_fd, "ERROR Format: LOGIN username password\n");
-                    }
-                }
-                else if (strncmp(buffer, "REGISTER ", 9) == 0) {
-                    char username[32], password[32];
-                    if (sscanf(buffer + 9, "%31s %31s", username, password) == 2) {
-                        int ret = auth_register(username, password);
-                        if (ret == 0) {
-                            send_message(client_fd, "OK Registered\n");
-                            logger_write("New user registered: %s", username);
-                        }
-                        else if (ret == -1) {
-                            send_message(client_fd, "ERROR Username already exists\n");
-                        }
-                        else {
-                            send_message(client_fd, "ERROR Cannot register\n");
-                        }
-                    }
-                    else {
-                        send_message(client_fd, "ERROR Format: REGISTER username password\n");
                     }
                 }
                 else if (strncmp(buffer, "LIST", 4) == 0) {
@@ -275,33 +261,30 @@ int main() {
                     clients[client_idx] = clients[client_count - 1];
                     client_count--;
                 }
-                else if (strncmp(buffer, "HISTORY ", 8) == 0) {
+
+                else if (strncmp(buffer, "HISTORY", 7) == 0) {
                     if (!clients[client_idx].logged_in) {
                         send_message(client_fd, "ERROR Please login first\n");
                     }
                     else {
-                        char other_user[32];
-                        if (sscanf(buffer + 8, "%31s", other_user) == 1) {
-                            char* hist = history_get(clients[client_idx].username,
-                                other_user);
-                            if (hist && strlen(hist) > 0) {
-                                send_message(client_fd, "HISTORY_BEGIN\n");
-                                char* line = strtok(hist, "\n");
-                                while (line) {
-                                    send_message(client_fd, line);
-                                    send_message(client_fd, "\n");
-                                    line = strtok(NULL, "\n");
-                                }
-                                send_message(client_fd, "HISTORY_END\n");
-                                free(hist);
+                        char* hist = history_get(clients[client_idx].username, clients[client_idx].username);
+                        if (hist && strlen(hist) > 0) {
+                            send_message(client_fd, "HISTORY_BEGIN\n");
+                            char* line = strtok(hist, "\n");
+                            while (line) {
+                                send_message(client_fd, line);
+                                send_message(client_fd, "\n");
+                                line = strtok(NULL, "\n");
                             }
-                            else {
-                                send_message(client_fd, "HISTORY_EMPTY\n");
-                                if (hist) free(hist);
-                            }
+                            send_message(client_fd, "HISTORY_END\n");
+                            free(hist);
+                        }
+                        else {
+                            send_message(client_fd, "HISTORY_EMPTY\n");
+                            if (hist) free(hist);
                         }
                     }
-                }
+                    }
                 else if (strncmp(buffer, "GROUP_CREATE ", 13) == 0) {
                     if (!clients[client_idx].logged_in) {
                         send_message(client_fd, "ERROR Please login first\n");
@@ -426,6 +409,7 @@ int main() {
         }
     }
 
+    history_log_event("SERVER_STOP", NULL, NULL);
     logger_write("SERVER STOPPED");
     for (int i = 0; i < client_count; i++) {
         close_socket(clients[i].fd);
@@ -441,4 +425,3 @@ int main() {
     printf("[SERVER] Done.\n");
     return 0;
 }
-

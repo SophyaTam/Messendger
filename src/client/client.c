@@ -9,7 +9,7 @@ static int server_fd;
 
 void* receiver_thread(void* arg) {
     (void)arg;
-    char buffer[1024];
+    char buffer[4096];
     int in_history = 0;
 
     while (1) {
@@ -18,57 +18,57 @@ void* receiver_thread(void* arg) {
             printf("\n[CLIENT] Server disconnected\n");
             exit(0);
         }
-        buffer[strcspn(buffer, "\n")] = '\0';
+        buffer[received] = '\0';
 
-        if (strncmp(buffer, "ENC:", 4) == 0) {
-            char* decrypted = crypto_decrypt(buffer + 4);
-            if (decrypted) {
-                strncpy(buffer, decrypted, sizeof(buffer) - 1);
-                buffer[sizeof(buffer) - 1] = '\0';
-                free(decrypted);
+        /* Разбиваем на строки */
+        char* line = strtok(buffer, "\n");
+        while (line) {
+            if (strlen(line) == 0) { line = strtok(NULL, "\n"); continue; }
+
+            /* Расшифровать если нужно */
+            if (strncmp(line, "ENC:", 4) == 0) {
+                char* decrypted = crypto_decrypt(line + 4);
+                if (decrypted) {
+                    printf("\r\033[K%s\n> ", decrypted);
+                    free(decrypted);
+                }
+                line = strtok(NULL, "\n");
+                continue;
             }
-        }
 
-        if (strlen(buffer) == 0) continue;
-
-        if (strcmp(buffer, "HISTORY_BEGIN") == 0) {
-            in_history = 1;
-            printf("\n=== История переписки ===\n");
-        }
-        else if (strcmp(buffer, "HISTORY_END") == 0) {
-            in_history = 0;
-            printf("=== Конец истории ===\n> ");
+            if (strcmp(line, "HISTORY_BEGIN") == 0) {
+                in_history = 1;
+                printf("\n=== История переписки ===\n");
+            }
+            else if (strcmp(line, "HISTORY_END") == 0) {
+                in_history = 0;
+                printf("=== Конец истории ===\n> ");
+                fflush(stdout);
+            }
+            else if (strcmp(line, "HISTORY_EMPTY") == 0) {
+                printf("\n(История пуста)\n> ");
+                fflush(stdout);
+            }
+            else if (in_history) {
+                printf("%s\n", line);
+            }
+            else if (strncmp(line, "LIST ", 5) == 0) {
+                printf("\r\033[KОнлайн: %s\n> ", line + 5);
+            }
+            else if (strncmp(line, "OK", 2) == 0 || strncmp(line, "GROUP_CREATED", 13) == 0 || strncmp(line, "GROUP_JOINED", 12) == 0) {
+                printf("\r\033[K[OK] %s\n> ", line);
+            }
+            else if (strncmp(line, "ERROR", 5) == 0) {
+                printf("\r\033[K[Ошибка] %s\n> ", line + 6);
+            }
+            else if (strncmp(line, "UNKNOWN", 7) == 0) {
+                /* Игнорируем */
+            }
+            else {
+                printf("\r\033[K[Сервер] %s\n> ", line);
+            }
             fflush(stdout);
-        }
-        else if (strcmp(buffer, "HISTORY_EMPTY") == 0) {
-            printf("\n(История пуста)\n> ");
-            fflush(stdout);
-        }
-        else if (in_history) {
-            printf("%s\n", buffer);
-        }
-        else if (strncmp(buffer, "[От ", 4) == 0 || strncmp(buffer, "[Группа ", 8) == 0) {
-            printf("\r\033[K%s\n> ", buffer);
-            fflush(stdout);
-        }
-        else if (strncmp(buffer, "LIST ", 5) == 0) {
-            printf("\r\033[KОнлайн: %s\n> ", buffer + 5);
-            fflush(stdout);
-        }
-        else if (strncmp(buffer, "OK", 2) == 0 || strncmp(buffer, "GROUP_CREATED", 13) == 0 || strncmp(buffer, "GROUP_JOINED", 12) == 0) {
-            printf("\r\033[K[OK] %s\n> ", buffer);
-            fflush(stdout);
-        }
-        else if (strncmp(buffer, "ERROR", 5) == 0) {
-            printf("\r\033[K[Ошибка] %s\n> ", buffer + 6);
-            fflush(stdout);
-        }
-        else if (strncmp(buffer, "UNKNOWN", 7) == 0) {
-            /* Игнорируем UNKNOWN */
-        }
-        else {
-            printf("\r\033[K[Сервер] %s\n> ", buffer);
-            fflush(stdout);
+            line = strtok(NULL, "\n");
         }
     }
     return NULL;
@@ -175,10 +175,8 @@ int main() {
             printf("  /group msg Имя Текст         — сообщение в группу\n");
             printf("  /register Имя Пароль         — зарегистрироваться (до входа)\n");
         }
-        else if (strncmp(input, "/history ", 9) == 0) {
-            char hist_cmd[64];
-            snprintf(hist_cmd, sizeof(hist_cmd), "HISTORY %s\n", input + 9);
-            send_message(server_fd, hist_cmd);
+        else if (strcmp(input, "/history") == 0) {
+            send_message(server_fd, "HISTORY\n");
         }
         else if (strncmp(input, "/group create ", 14) == 0) {
             char cmd[128];
