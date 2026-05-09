@@ -49,7 +49,6 @@ int auth_init(const char *passwd_file) {
         *colon = '\0';
         strncpy(users[i].username, line, sizeof(users[i].username) - 1);
         sha256_hash(colon + 1, users[i].hash);
-        printf("[AUTH DEBUG] user=%s pass=%s hash=%s\n", users[i].username, colon + 1, users[i].hash);
         i++;
     }
 
@@ -74,6 +73,27 @@ int auth_check(const char *username, const char *password) {
     return -1;
 }
 
+int auth_register(const char* username, const char* password) {
+    for (int i = 0; i < user_count; i++) {
+        if (strcmp(users[i].username, username) == 0) return -1;
+    }
+
+    FILE* f = fopen("data/passwd", "a");
+    if (!f) return -2;
+
+    fprintf(f, "%s:%s\n", username, password);
+    fclose(f);
+
+    users = realloc(users, sizeof(User) * (user_count + 1));
+    strncpy(users[user_count].username, username, sizeof(users[user_count].username) - 1);
+    sha256_hash(password, users[user_count].hash);
+    user_count++;
+
+    printf("[AUTH] Registered new user: %s\n", username);
+    return 0;
+}
+
+
 void auth_cleanup(void) {
     if (users) {
         free(users);
@@ -81,3 +101,4 @@ void auth_cleanup(void) {
         user_count = 0;
     }
 }
+

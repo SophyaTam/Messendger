@@ -81,29 +81,48 @@ int main() {
 
     crypto_init("messenger2026key");
 
+    /* --- Аутентификация или регистрация --- */
     char username[32], password[32];
-    printf("Login: ");
-    fgets(username, sizeof(username), stdin);
-    username[strcspn(username, "\n")] = '\0';
-    printf("Password: ");
-    fgets(password, sizeof(password), stdin);
-    password[strcspn(password, "\n")] = '\0';
+    int logged_in = 0;
 
-    char command[128];
-    snprintf(command, sizeof(command), "LOGIN %s %s\n", username, password);
-    send_message(server_fd, command);
+    while (!logged_in) {
+        printf("Login (/register для создания аккаунта): ");
+        fgets(username, sizeof(username), stdin);
+        username[strcspn(username, "\n")] = '\0';
 
-    char response[256];
-    int received = receive_message(server_fd, response, sizeof(response));
-    if (received > 0) {
-        response[strcspn(response, "\n")] = '\0';
-        printf("[Сервер] %s\n", response);
-        if (strncmp(response, "OK", 2) != 0) {
-            close_socket(server_fd);
-            return 1;
+        if (strncmp(username, "/register ", 10) == 0) {
+            char cmd[128];
+            snprintf(cmd, sizeof(cmd), "REGISTER %s\n", username + 10);
+            send_message(server_fd, cmd);
+            char resp[256];
+            int r = receive_message(server_fd, resp, sizeof(resp));
+            if (r > 0) {
+                resp[strcspn(resp, "\n")] = '\0';
+                printf("[Сервер] %s\n", resp);
+            }
+            continue;
+        }
+
+        printf("Password: ");
+        fgets(password, sizeof(password), stdin);
+        password[strcspn(password, "\n")] = '\0';
+
+        char command[128];
+        snprintf(command, sizeof(command), "LOGIN %s %s\n", username, password);
+        send_message(server_fd, command);
+
+        char response[256];
+        int received = receive_message(server_fd, response, sizeof(response));
+        if (received > 0) {
+            response[strcspn(response, "\n")] = '\0';
+            printf("[Сервер] %s\n", response);
+            if (strncmp(response, "OK", 2) == 0) {
+                logged_in = 1;
+            }
         }
     }
 
+    /* --- Запуск потока-приёмника --- */
     pthread_t recv_thread;
     pthread_create(&recv_thread, NULL, receiver_thread, NULL);
 
@@ -143,14 +162,15 @@ int main() {
         }
         else if (strcmp(input, "/help") == 0) {
             printf("Команды:\n");
-            printf("  /msg Имя Текст — отправить личное сообщение\n");
-            printf("  /list           — список онлайн-пользователей\n");
-            printf("  /quit           — выйти\n");
-            printf("  /help           — эта справка\n");
-            printf("  /history Имя    — показать историю переписки\n");
-            printf("  /group create Имя Пароль  — создать группу с паролем\n");
-            printf("  /group join Имя Пароль     — войти в группу\n");
-            printf("  /group msg Имя Текст       — сообщение в группу\n");
+            printf("  /msg Имя Текст              — отправить личное сообщение\n");
+            printf("  /list                        — список онлайн-пользователей\n");
+            printf("  /quit                        — выйти\n");
+            printf("  /help                        — эта справка\n");
+            printf("  /history Имя                 — показать историю переписки\n");
+            printf("  /group create Имя Пароль     — создать группу с паролем\n");
+            printf("  /group join Имя Пароль       — войти в группу\n");
+            printf("  /group msg Имя Текст         — сообщение в группу\n");
+            printf("  /register Имя Пароль         — зарегистрироваться (до входа)\n");
         }
         else if (strncmp(input, "/history ", 9) == 0) {
             char hist_cmd[64];

@@ -150,7 +150,26 @@ int main() {
                     }
                 }
 
-                if (strncmp(buffer, "LOGIN ", 6) == 0) {
+                if (strncmp(buffer, "REGISTER ", 9) == 0) {
+                    char username[32], password[32];
+                    if (sscanf(buffer + 9, "%31s %31s", username, password) == 2) {
+                        int ret = auth_register(username, password);
+                        if (ret == 0) {
+                            send_message(client_fd, "OK Registered\n");
+                            logger_write("New user registered: %s", username);
+                        }
+                        else if (ret == -1) {
+                            send_message(client_fd, "ERROR Username already exists\n");
+                        }
+                        else {
+                            send_message(client_fd, "ERROR Cannot register\n");
+                        }
+                    }
+                    else {
+                        send_message(client_fd, "ERROR Format: REGISTER username password\n");
+                    }
+                }
+                else if (strncmp(buffer, "LOGIN ", 6) == 0) {
                     char username[32], password[32];
                     if (sscanf(buffer + 6, "%31s %31s", username, password) == 2) {
                         int result = auth_check(username, password);
@@ -170,6 +189,25 @@ int main() {
                     }
                     else {
                         send_message(client_fd, "ERROR Format: LOGIN username password\n");
+                    }
+                }
+                else if (strncmp(buffer, "REGISTER ", 9) == 0) {
+                    char username[32], password[32];
+                    if (sscanf(buffer + 9, "%31s %31s", username, password) == 2) {
+                        int ret = auth_register(username, password);
+                        if (ret == 0) {
+                            send_message(client_fd, "OK Registered\n");
+                            logger_write("New user registered: %s", username);
+                        }
+                        else if (ret == -1) {
+                            send_message(client_fd, "ERROR Username already exists\n");
+                        }
+                        else {
+                            send_message(client_fd, "ERROR Cannot register\n");
+                        }
+                    }
+                    else {
+                        send_message(client_fd, "ERROR Format: REGISTER username password\n");
                     }
                 }
                 else if (strncmp(buffer, "LIST", 4) == 0) {
