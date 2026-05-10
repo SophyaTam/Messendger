@@ -74,9 +74,11 @@ void* receiver_thread(void* arg) {
     return NULL;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     printf("[CLIENT] Connecting...\n");
-    server_fd = connect_to_server("127.0.0.1", 7777);
+    const char* server_ip = "127.0.0.1";
+    if (argc > 1) server_ip = argv[1];
+    server_fd = connect_to_server(server_ip, 7777);
     if (server_fd < 0) {
         fprintf(stderr, "[CLIENT] Failed to connect\n");
         return 1;
