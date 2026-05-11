@@ -184,6 +184,19 @@ int main() {
                             send_message(client_fd, "OK\n");
                             logger_write("User %s logged in (fd=%d)", username, client_fd);
                             history_log_event("USER_LOGIN", username, NULL);
+                            /* Отправить офлайн-сообщения */
+                            char* offline = history_get_offline(username);
+                            if (offline && strlen(offline) > 0) {
+                                send_message(client_fd, "OFFLINE_BEGIN\n");
+                                char* line = strtok(offline, "\n");
+                                while (line) {
+                                    send_message(client_fd, line);
+                                    send_message(client_fd, "\n");
+                                    line = strtok(NULL, "\n");
+                                }
+                                send_message(client_fd, "OFFLINE_END\n");
+                                free(offline);
+                            }
                         }
                         else if (result == 0) {
                             send_message(client_fd, "ERROR Wrong password\n");
@@ -245,7 +258,10 @@ int main() {
                                     recipient, message);
                             }
                             else {
-                                send_message(client_fd, "ERROR User offline\n");
+                                history_save_offline(clients[client_idx].username, recipient, message);
+                                send_message(client_fd, "OK Saved (user offline)\n");
+                                logger_write("Offline message from %s to %s: %s",
+                                    clients[client_idx].username, recipient, message);
                             }
                         }
                         else {

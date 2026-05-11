@@ -18,4 +18,8 @@ void history_close(void);
 sqlite3* history_get_db(void);
 
 void history_log_event(const char* type, const char* username, const char* data);
+
+/* Получить и отметить доставленными офлайн-сообщения для пользователя */
+void history_save_offline(const char* sender, const char* receiver, const char* message);
+char* history_get_offline(const char* username);
 #endif

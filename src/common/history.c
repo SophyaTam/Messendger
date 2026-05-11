@@ -20,7 +20,8 @@ int history_init(const char* db_filename) {
         "  sender TEXT NOT NULL,"
         "  receiver TEXT NOT NULL,"
         "  message TEXT NOT NULL,"
-        "  timestamp TEXT NOT NULL"
+        "  timestamp TEXT NOT NULL,"
+        "  delivered INTEGER DEFAULT 1"
         ");";
 
     char* err = NULL;
@@ -135,6 +136,69 @@ char* history_get(const char* user1, const char* user2) {
 
         if (strlen(result) + strlen(line) < 4000) {
             strcat(result, line);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+void history_save_offline(const char* sender, const char* receiver, const char* message) {
+    if (!db) return;
+
+    time_t now = time(NULL);
+    struct tm* t = localtime(&now);
+    char time_str[64];
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", t);
+
+    const char* sql = "INSERT INTO messages (sender, receiver, message, timestamp, delivered) "
+        "VALUES (?, ?, ?, ?, 0);";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) return;
+
+    sqlite3_bind_text(stmt, 1, sender, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, receiver, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, message, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, time_str, -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+}
+
+char* history_get_offline(const char* username) {
+    if (!db) return NULL;
+
+    const char* sql = "SELECT id, sender, message, timestamp FROM messages "
+        "WHERE receiver = ? AND delivered = 0 "
+        "ORDER BY id ASC;";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) return NULL;
+
+    sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
+
+    char* result = malloc(4096);
+    if (!result) { sqlite3_finalize(stmt); return NULL; }
+    result[0] = '\0';
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        int id = sqlite3_column_int(stmt, 0);
+        const char* sender = (const char*)sqlite3_column_text(stmt, 1);
+        const char* message = (const char*)sqlite3_column_text(stmt, 2);
+        const char* timestamp = (const char*)sqlite3_column_text(stmt, 3);
+
+        char line[1024];
+        snprintf(line, sizeof(line), "[%s] [From %s] %s\n", timestamp, sender, message);
+
+        if (strlen(result) + strlen(line) < 4000) {
+            strcat(result, line);
+        }
+
+        /* Отмечаем как доставленное */
+        const char* update = "UPDATE messages SET delivered = 1 WHERE id = ?;";
+        sqlite3_stmt* ustmt;
+        if (sqlite3_prepare_v2(db, update, -1, &ustmt, NULL) == SQLITE_OK) {
+            sqlite3_bind_int(ustmt, 1, id);
+            sqlite3_step(ustmt);
+            sqlite3_finalize(ustmt);
         }
     }
 

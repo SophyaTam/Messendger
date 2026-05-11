@@ -85,6 +85,15 @@ void* receiver_thread(void* arg) {
                 printf("\n(История пуста)\n> ");
                 fflush(stdout);
             }
+            if (strcmp(line, "OFFLINE_BEGIN") == 0) {
+                in_history = 1;
+                printf("\n=== Пропущенные сообщения ===\n");
+            }
+            else if (strcmp(line, "OFFLINE_END") == 0) {
+                in_history = 0;
+                printf("=== Конец ===\n> ");
+                fflush(stdout);
+            }
             else if (in_history) {
                 printf("%s\n", line);
             }
