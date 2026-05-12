@@ -1,4 +1,4 @@
-#include "history.h"
+﻿#include "history.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +21,8 @@ int history_init(const char* db_filename) {
         "  receiver TEXT NOT NULL,"
         "  message TEXT NOT NULL,"
         "  timestamp TEXT NOT NULL,"
-        "  delivered INTEGER DEFAULT 1"
+        "  delivered INTEGER DEFAULT 1,"
+        "  parent_id INTEGER DEFAULT 0"
         ");";
 
     char* err = NULL;
@@ -105,7 +106,7 @@ char* history_get(const char* user1, const char* user2) {
     if (!db) return NULL;
 
     const char* sql =
-        "SELECT sender, receiver, message, timestamp FROM messages "
+        "SELECT id, sender, message, timestamp, parent_id FROM messages "
         "WHERE sender = ?1 OR receiver = ?1 "
         "ORDER BY id ASC;";
 
@@ -126,17 +127,20 @@ char* history_get(const char* user1, const char* user2) {
     result[0] = '\0';
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-        const char* sender = (const char*)sqlite3_column_text(stmt, 0);
-        const char* receiver = (const char*)sqlite3_column_text(stmt, 1);
+        int id = sqlite3_column_int(stmt, 0);
+        const char* sender = (const char*)sqlite3_column_text(stmt, 1);
         const char* message = (const char*)sqlite3_column_text(stmt, 2);
-        const char* timestamp = (const char*)sqlite3_column_text(stmt, 3);
+        /* timestamp не используется в новом формате */
+        (void)sqlite3_column_text(stmt, 3);
+        int parent_id = sqlite3_column_int(stmt, 4);
 
         char line[1024];
-        snprintf(line, sizeof(line), "[%s] %s -> %s: %s\n", timestamp, sender, receiver, message);
+        if (parent_id > 0)
+            snprintf(line, sizeof(line), "  [%d → %d] %s: %s\n", id, parent_id, sender, message);
+        else
+            snprintf(line, sizeof(line), "[%d] %s: %s\n", id, sender, message);
 
-        if (strlen(result) + strlen(line) < 4000) {
-            strcat(result, line);
-        }
+        if (strlen(result) + strlen(line) < 4000) strcat(result, line);
     }
 
     sqlite3_finalize(stmt);
@@ -192,7 +196,7 @@ char* history_get_offline(const char* username) {
             strcat(result, line);
         }
 
-        /* �������� ��� ������������ */
+        /* Отмечаем как доставленное */
         const char* update = "UPDATE messages SET delivered = 1 WHERE id = ?;";
         sqlite3_stmt* ustmt;
         if (sqlite3_prepare_v2(db, update, -1, &ustmt, NULL) == SQLITE_OK) {
@@ -204,6 +208,28 @@ char* history_get_offline(const char* username) {
 
     sqlite3_finalize(stmt);
     return result;
+}
+
+void history_save_thread(const char* sender, const char* receiver, const char* message, int parent_id) {
+    if (!db) return;
+
+    time_t now = time(NULL);
+    struct tm* t = localtime(&now);
+    char time_str[64];
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", t);
+
+    const char* sql = "INSERT INTO messages (sender, receiver, message, timestamp, parent_id) "
+        "VALUES (?, ?, ?, ?, ?);";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) return;
+
+    sqlite3_bind_text(stmt, 1, sender, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, receiver, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, message, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, time_str, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 5, parent_id);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
 }
 
 void history_close(void) {

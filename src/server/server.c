@@ -295,6 +295,50 @@ void* handle_client(void* arg) {
                 }
             }
         }
+
+        /* THREAD — ответ на конкретное сообщение */
+        else if (strncmp(buffer, "THREAD ", 7) == 0) {
+            if (!my_node->logged_in) {
+                send_message(client_fd, "ERROR Please login first\n");
+            }
+            else {
+                int parent_id;
+                char rest[1024];
+                if (sscanf(buffer + 7, "%d %1023[^\n]", &parent_id, rest) == 2) {
+                    /* Найти получателя — отправитель родительского сообщения */
+                    /* Упростим: отправляем тому, кому адресовано /thread id имя текст */
+                    char* space = strchr(rest, ' ');
+                    if (space) {
+                        *space = '\0';
+                        char* recipient = rest;
+                        char* msg = space + 1;
+
+                        pthread_mutex_lock(&hash_mutex);
+                        int recv_fd = hash_find_fd_by_name(recipient);
+                        if (recv_fd >= 0) {
+                            char plain_forward[1280];
+                            snprintf(plain_forward, sizeof(plain_forward), "[Thread %d | %s] %s",
+                                parent_id, my_node->username, msg);
+                            char* enc = crypto_encrypt(plain_forward);
+                            if (enc) {
+                                char final_msg[1400];
+                                snprintf(final_msg, sizeof(final_msg), "ENC:%s\n", enc);
+                                send_message(recv_fd, final_msg);
+                                free(enc);
+                            }
+                            pthread_mutex_unlock(&hash_mutex);
+                            send_message(client_fd, "OK\n");
+                            history_save_thread(my_node->username, recipient, msg, parent_id);
+                        }
+                        else {
+                            pthread_mutex_unlock(&hash_mutex);
+                            send_message(client_fd, "ERROR User offline\n");
+                        }
+                    }
+                }
+            }
+        }
+
         /* EXIT */
         else if (strncmp(buffer, "EXIT", 4) == 0) {
             send_message(client_fd, "BYE\n");

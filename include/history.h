@@ -21,5 +21,8 @@ void history_log_event(const char* type, const char* username, const char* data)
 
 /* Получить и отметить доставленными офлайн-сообщения для пользователя */
 void history_save_offline(const char* sender, const char* receiver, const char* message);
+
+void history_save_thread(const char* sender, const char* receiver, const char* message, int parent_id);
+
 char* history_get_offline(const char* username);
 #endif

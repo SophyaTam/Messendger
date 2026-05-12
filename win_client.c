@@ -272,6 +272,19 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+        else if (strncmp(input, "/thread ", 8) == 0) {
+            char* space = strchr(input + 8, ' ');
+            if (space) {
+                *space = '\0';
+                char* enc_text = crypto_encrypt(space + 1);
+                if (enc_text) {
+                    char cmd[1536];
+                    snprintf(cmd, sizeof(cmd), "ENC:THREAD %s %s\n", input + 8, enc_text);
+                    send_message(server_sock, cmd);
+                    free(enc_text);
+                }
+            }
+        }
         else if (strcmp(input, "/history") == 0)
         {
             send_message(server_sock, "HISTORY\n");
@@ -279,6 +292,7 @@ int main(int argc, char* argv[]) {
         else if (strcmp(input, "/help") == 0) {
             printf("Commands: /msg, /list, /quit, /help, /history\n");
             printf("  /group create/join/msg, /register\n");
+            printf("  /thread Name Text — reply in thread\n");
         }
         else if (strncmp(input, "/group create ", 14) == 0) {
             char cmd[512];

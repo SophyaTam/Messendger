@@ -229,6 +229,11 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+        else if (strncmp(input, "/thread ", 8) == 0) {
+            char cmd[1280];
+            snprintf(cmd, sizeof(cmd), "THREAD %s\n", input + 8);
+            send_message(server_fd, cmd);
+        }
         else if (strncmp(input, "/forward ", 9) == 0) {
             if (strlen(last_message) == 0) {
                 printf("Нет сообщений для пересылки.\n");
@@ -259,6 +264,7 @@ int main(int argc, char* argv[]) {
             printf("  /group join Имя Пароль      — войти в группу\n");
             printf("  /group msg Имя Текст        — сообщение в группу\n");
             printf("  /register Имя Пароль        — зарегистрироваться (до входа)\n");
+            printf("  /thread ID Имя Текст        — ответить в ветку сообщения\n");
         }
         else if (strcmp(input, "/history") == 0) {
             send_message(server_fd, "HISTORY\n");
