@@ -22,7 +22,20 @@ last_sender = ""
 KEY = b'messenger2026key'
 IV = KEY
 
+def encrypt_hex(plaintext):
+    """Зашифровать текст в hex-строку (AES-128-CBC)"""
+    try:
+        raw = plaintext.encode('utf-8')
+        pad_len = 16 - (len(raw) % 16)
+        raw = raw + bytes([pad_len] * pad_len)
+        cipher = AES.new(KEY, AES.MODE_CBC, IV)
+        encrypted = cipher.encrypt(raw)
+        return binascii.hexlify(encrypted).decode()
+    except:
+        return None
+
 def decrypt_hex(hex_str):
+    """Расшифровать hex-строку (AES-128-CBC)"""
     try:
         raw = binascii.unhexlify(hex_str)
         cipher = AES.new(KEY, AES.MODE_CBC, IV)
@@ -49,7 +62,6 @@ def receive_messages():
                 if line.startswith("ENC:"):
                     decrypted = decrypt_hex(line[4:])
                     if decrypted:
-                        # Сохраняем отправителя для /reply
                         if decrypted.startswith("[От ") or decrypted.startswith("[From "):
                             end_bracket = decrypted.index(']')
                             prefix, sender = decrypted[1:end_bracket].split(' ', 1)
@@ -134,10 +146,14 @@ def main():
         elif cmd.startswith("/msg "):
             parts = cmd[5:].split(' ', 1)
             if len(parts) == 2:
-                sock.sendall(f"SEND {parts[0]} {parts[1]}\n".encode())
+                enc = encrypt_hex(parts[1])
+                if enc:
+                    sock.sendall(f"ENC:SEND {parts[0]} {enc}\n".encode())
         elif cmd.startswith("/reply "):
             if last_sender:
-                sock.sendall(f"SEND {last_sender} {cmd[7:]}\n".encode())
+                enc = encrypt_hex(cmd[7:])
+                if enc:
+                    sock.sendall(f"ENC:SEND {last_sender} {enc}\n".encode())
             else:
                 print("No message to reply to.")
         elif cmd.startswith("/forward "):
@@ -145,7 +161,9 @@ def main():
         elif cmd.startswith("/thread "):
             parts = cmd[8:].split(' ', 1)
             if len(parts) == 2:
-                sock.sendall(f"THREAD {parts[0]} {parts[1]}\n".encode())
+                enc = encrypt_hex(parts[1])
+                if enc:
+                    sock.sendall(f"ENC:THREAD {parts[0]} {enc}\n".encode())
         elif cmd.startswith("/group create "):
             sock.sendall(f"GROUP_CREATE {cmd[14:]}\n".encode())
         elif cmd.startswith("/group join "):
