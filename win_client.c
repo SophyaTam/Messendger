@@ -174,6 +174,12 @@ DWORD WINAPI receiver_thread(LPVOID param) {
                 printf("\n=== Missed messages ===\n");
             else if (strcmp(line, "OFFLINE_END") == 0)
                 printf("=== End ===\n> ");
+            else if (strncmp(line, "SERVER_SHUTDOWN", 15) == 0)
+            {
+                printf("\r[Server] %s\n", line);
+                running = 0;
+                exit(0);
+            }
             else if (strcmp(line, "BYE") == 0)
             {
                 printf("[Server] Bye!\n"); running = 0; exit(0);

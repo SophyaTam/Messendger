@@ -29,7 +29,6 @@ void* receiver_thread(void* arg) {
             if (strncmp(line, "ENC:", 4) == 0) {
                 char* decrypted = crypto_decrypt(line + 4);
                 if (decrypted) {
-                    /* Сохраняем, если это [От ...] */
                     char* from_pos = strstr(decrypted, "[");
                     if (from_pos && strncmp(from_pos, "[", 1) == 0) {
                         from_pos = strstr(decrypted, "[From ");
@@ -45,7 +44,6 @@ void* receiver_thread(void* arg) {
                             if (name_len > 31) name_len = 31;
                             memcpy(last_sender, sender_start, name_len);
                             last_sender[name_len] = '\0';
-                            /* Удаляем не-буквенные символы в начале */
                             int start = 0;
                             while (start < name_len &&
                                 !((last_sender[start] >= 'a' && last_sender[start] <= 'z') ||
@@ -70,6 +68,13 @@ void* receiver_thread(void* arg) {
                 }
                 line = strtok(NULL, "\n");
                 continue;
+            }
+
+            /* Уведомление о выключении сервера */
+            if (strncmp(line, "SERVER_SHUTDOWN", 15) == 0) {
+                printf("\r\033[K[Сервер] %s\n", line);
+                fflush(stdout);
+                exit(0);
             }
 
             if (strcmp(line, "HISTORY_BEGIN") == 0) {

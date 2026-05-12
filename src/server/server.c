@@ -18,6 +18,8 @@
 #define PORT 7777
 
 static int running = 1;
+static int server_tcp_fd = -1;
+static int server_unix_fd = -1;
 
 /* Мьютекс для синхронизации доступа к хеш-таблице */
 static pthread_mutex_t hash_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -32,13 +34,34 @@ void* handle_client(void* arg);
 
 void handle_signal(int sig) {
     (void)sig;
-    printf("\n[SERVER] Received signal, shutting down...\n");
+    printf("\n[SERVER] Received signal %d, shutting down...\n", sig);
     running = 0;
+
+    /* Отправить уведомление всем клиентам */
+    pthread_mutex_lock(&hash_mutex);
+    char* userlist = hash_get_online_list();
+    if (userlist) {
+        /* Проходим по всем и отправляем */
+        char* tok = strtok(userlist, " ");
+        while (tok) {
+            int fd = hash_find_fd_by_name(tok);
+            if (fd >= 0) {
+                send_message(fd, "SERVER_SHUTDOWN Сервер выключается. До свидания!\n");
+            }
+            tok = strtok(NULL, " ");
+        }
+        free(userlist);
+    }
+    pthread_mutex_unlock(&hash_mutex);
+
+    if (server_tcp_fd >= 0) close(server_tcp_fd);
+    if (server_unix_fd >= 0) close(server_unix_fd);
 }
 
 int main() {
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
+    signal(SIGHUP, handle_signal);
 
     if (logger_init("logs/server.log") < 0) {
         fprintf(stderr, "Failed to init logger\n");
@@ -70,6 +93,9 @@ int main() {
         logger_write("Failed to create sockets");
         return 1;
     }
+
+    server_tcp_fd = tcp_fd;
+    server_unix_fd = unix_fd;
 
     printf("[SERVER] Entering main loop (multi-threaded, hash table)...\n");
 
@@ -137,8 +163,6 @@ int main() {
     history_log_event("SERVER_STOP", NULL, NULL);
     logger_write("SERVER STOPPED");
 
-    /* Хеш-таблица очищается в hash_cleanup() */
-
     close_socket(tcp_fd);
     close_socket(unix_fd);
     unlink("/tmp/messenger.sock");
@@ -177,7 +201,6 @@ void* handle_client(void* arg) {
         buffer[strcspn(buffer, "\n")] = '\0';
         printf("[SERVER] Received from fd=%d: %s\n", client_fd, buffer);
 
-        /* Проверяем, жив ли ещё клиент */
         pthread_mutex_lock(&hash_mutex);
         ClientNode* my_node = hash_find_by_fd(client_fd);
         pthread_mutex_unlock(&hash_mutex);
@@ -200,16 +223,9 @@ void* handle_client(void* arg) {
             char username[32], password[32];
             if (sscanf(buffer + 9, "%31s %31s", username, password) == 2) {
                 int ret = auth_register(username, password);
-                if (ret == 0) {
-                    send_message(client_fd, "OK Registered\n");
-                    logger_write("New user registered: %s", username);
-                }
-                else if (ret == -1) {
-                    send_message(client_fd, "ERROR Username already exists\n");
-                }
-                else {
-                    send_message(client_fd, "ERROR Cannot register\n");
-                }
+                if (ret == 0) { send_message(client_fd, "OK Registered\n"); }
+                else if (ret == -1) { send_message(client_fd, "ERROR Username already exists\n"); }
+                else { send_message(client_fd, "ERROR Cannot register\n"); }
             }
         }
         /* LOGIN */
@@ -233,12 +249,8 @@ void* handle_client(void* arg) {
                         free(offline);
                     }
                 }
-                else if (result == 0) {
-                    send_message(client_fd, "ERROR Wrong password\n");
-                }
-                else {
-                    send_message(client_fd, "ERROR User not found\n");
-                }
+                else if (result == 0) { send_message(client_fd, "ERROR Wrong password\n"); }
+                else { send_message(client_fd, "ERROR User not found\n"); }
             }
         }
         /* LIST */
@@ -263,8 +275,7 @@ void* handle_client(void* arg) {
                     int recv_fd = hash_find_fd_by_name(recipient);
                     if (recv_fd >= 0) {
                         char plain_forward[1280];
-                        snprintf(plain_forward, sizeof(plain_forward), "[От %s] %s",
-                            my_node->username, message);
+                        snprintf(plain_forward, sizeof(plain_forward), "[От %s] %s", my_node->username, message);
                         char* enc = crypto_encrypt(plain_forward);
                         if (enc) {
                             char final_msg[1400];
@@ -288,9 +299,8 @@ void* handle_client(void* arg) {
         else if (strncmp(buffer, "EXIT", 4) == 0) {
             send_message(client_fd, "BYE\n");
             pthread_mutex_lock(&hash_mutex);
-            if (my_node->username[0] != '\0') {
+            if (my_node->username[0] != '\0')
                 logger_write("Client %s disconnected (fd=%d)", my_node->username, client_fd);
-            }
             hash_remove(client_fd);
             pthread_mutex_unlock(&hash_mutex);
             close_socket(client_fd);
@@ -298,9 +308,7 @@ void* handle_client(void* arg) {
         }
         /* HISTORY */
         else if (strncmp(buffer, "HISTORY", 7) == 0) {
-            if (!my_node->logged_in) {
-                send_message(client_fd, "ERROR Please login first\n");
-            }
+            if (!my_node->logged_in) { send_message(client_fd, "ERROR Please login first\n"); }
             else {
                 char* hist = history_get(my_node->username, my_node->username);
                 if (hist && strlen(hist) > 0) {
@@ -310,9 +318,7 @@ void* handle_client(void* arg) {
                     send_message(client_fd, "HISTORY_END\n");
                     free(hist);
                 }
-                else {
-                    send_message(client_fd, "HISTORY_EMPTY\n");
-                }
+                else { send_message(client_fd, "HISTORY_EMPTY\n"); }
             }
         }
         /* GROUP_CREATE */
