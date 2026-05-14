@@ -230,9 +230,20 @@ int main(int argc, char* argv[]) {
             }
         }
         else if (strncmp(input, "/thread ", 8) == 0) {
-            char cmd[1280];
-            snprintf(cmd, sizeof(cmd), "THREAD %s\n", input + 8);
-            send_message(server_fd, cmd);
+            char* rest = input + 8;
+            char* space = strchr(rest, ' ');
+            if (space) {
+                *space = '\0';
+                char* recipient = rest;
+                char* text = space + 1;
+                char* enc_text = crypto_encrypt(text);
+                if (enc_text) {
+                    char send_cmd[1280];
+                    snprintf(send_cmd, sizeof(send_cmd), "ENC:THREAD %s %s\n", recipient, enc_text);
+                    send_message(server_fd, send_cmd);
+                    free(enc_text);
+                }
+            }
         }
         else if (strncmp(input, "/forward ", 9) == 0) {
             if (strlen(last_message) == 0) {

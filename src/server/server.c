@@ -218,6 +218,18 @@ void* handle_client(void* arg) {
             }
         }
 
+        /* Расшифровка ENC:THREAD */
+        if (strncmp(buffer, "ENC:THREAD ", 11) == 0) {
+            char prefix[16], recipient[32], hex_cipher[1024];
+            if (sscanf(buffer, "%15s %31s %1023s", prefix, recipient, hex_cipher) == 3) {
+                char* plaintext = crypto_decrypt(hex_cipher);
+                if (plaintext) {
+                    snprintf(buffer, 1024, "THREAD %s %s", recipient, plaintext);
+                    free(plaintext);
+                }
+            }
+        }
+
         /* REGISTER */
         if (strncmp(buffer, "REGISTER ", 9) == 0) {
             char username[32], password[32];
