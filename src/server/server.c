@@ -14,17 +14,17 @@
 #include "group.h"
 #include "client_hash.h"
 
-#define MAX_CLIENTS 10
-#define PORT 7777
+#define MAX_CLIENTS 10     // Максимальное количество одновременных клиентов
+#define PORT 7777           // Порт сервера
 
-static int running = 1;
-static int server_tcp_fd = -1;
-static int server_unix_fd = -1;
+static int running = 1;                     // Флаг работы сервера (0 = завершение)
+static int server_tcp_fd = -1;              // Дескриптор TCP-сокета
+static int server_unix_fd = -1;             // Дескриптор Unix-сокета
 
 /* Мьютекс для синхронизации доступа к хеш-таблице */
 static pthread_mutex_t hash_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-/* Структура для передачи в поток */
+/* Структура для передачи дескриптора в  новый поток */
 typedef struct {
     int fd;
 } ClientThreadArgs;
@@ -32,6 +32,8 @@ typedef struct {
 /* Прототип функции обработки клиента */
 void* handle_client(void* arg);
 
+// Обработчик сигналов (SIGINT, SIGTERM, SIGHUP)
+// При получении сигнала оповещает всех клиентов и завершает сервер
 void handle_signal(int sig) {
     (void)sig;
     printf("\n[SERVER] Received signal %d, shutting down...\n", sig);
@@ -42,9 +44,9 @@ void handle_signal(int sig) {
     char* userlist = hash_get_online_list();
     if (userlist) {
         /* Проходим по всем и отправляем */
-        char* tok = strtok(userlist, " ");
+        char* tok = strtok(userlist, " ");      // Разбиваем список на имена
         while (tok) {
-            int fd = hash_find_fd_by_name(tok);
+            int fd = hash_find_fd_by_name(tok);  // Находим сокет клиента по имени
             if (fd >= 0) {
                 send_message(fd, "SERVER_SHUTDOWN Сервер выключается. До свидания!\n");
             }
@@ -54,15 +56,18 @@ void handle_signal(int sig) {
     }
     pthread_mutex_unlock(&hash_mutex);
 
+    // Закрываем серверные сокеты для выхода из poll()
     if (server_tcp_fd >= 0) close(server_tcp_fd);
     if (server_unix_fd >= 0) close(server_unix_fd);
 }
 
 int main() {
-    signal(SIGINT, handle_signal);
-    signal(SIGTERM, handle_signal);
-    signal(SIGHUP, handle_signal);
+    // Регистрируем обработчики сигналов
+    signal(SIGINT, handle_signal);    // Ctrl+C
+    signal(SIGTERM, handle_signal);   // kill
+    signal(SIGHUP, handle_signal);    // Обрыв связи
 
+    // Инициализация логера
     if (logger_init("logs/server.log") < 0) {
         fprintf(stderr, "Failed to init logger\n");
         return 1;
@@ -70,6 +75,7 @@ int main() {
     logger_write("SERVER STARTED");
     history_log_event("SERVER_START", NULL, NULL);
 
+    // Инициализация модулей
     if (auth_init("data/passwd") < 0) {
         logger_write("Failed to load passwd file");
         return 1;
@@ -86,6 +92,7 @@ int main() {
     group_init(history_get_db());
     hash_init();
 
+    // Создаём серверные сокеты (TCP и Unix)
     int tcp_fd = create_server_socket(PORT);
     int unix_fd = create_unix_server_socket("/tmp/messenger.sock");
 
@@ -99,34 +106,39 @@ int main() {
 
     printf("[SERVER] Entering main loop (multi-threaded, hash table)...\n");
 
+    // Главный цикл: принимаем новые подключения
     while (running) {
         struct pollfd fds[2];
+        // Ждём подключений по TCP
         fds[0].fd = tcp_fd;
         fds[0].events = POLLIN;
+        // Ждём подключений по Unix
         fds[1].fd = unix_fd;
         fds[1].events = POLLIN;
 
-        int ret = poll(fds, 2, 1000);
+        int ret = poll(fds, 2, 1000);  // Таймаут 1 сек для проверки running
         if (ret < 0) {
             if (running) perror("poll");
             break;
         }
-        if (ret == 0) continue;
+        if (ret == 0) continue;   // Нет событий — идём на следующую итерацию
 
+        // Новое TCP-подключение
         if (fds[0].revents & POLLIN) {
             int client_fd = accept_client(tcp_fd);
             if (client_fd >= 0) {
                 pthread_mutex_lock(&hash_mutex);
                 if (hash_count() < MAX_CLIENTS) {
-                    hash_add("", client_fd, 0);
+                    hash_add("", client_fd, 0);   // Добавляем с пустым именем
                     logger_write("Client connected via TCP (fd=%d)", client_fd);
                     pthread_mutex_unlock(&hash_mutex);
 
+                    // Создаём поток для обработки этого клиента
                     ClientThreadArgs* args = malloc(sizeof(ClientThreadArgs));
                     args->fd = client_fd;
                     pthread_t tid;
                     pthread_create(&tid, NULL, handle_client, args);
-                    pthread_detach(tid);
+                    pthread_detach(tid);   // Поток сам освободит ресурсы при завершении
                 }
                 else {
                     pthread_mutex_unlock(&hash_mutex);
@@ -136,6 +148,7 @@ int main() {
             }
         }
 
+        // Новое Unix-подключение (аналогично TCP)
         if (fds[1].revents & POLLIN) {
             int client_fd = accept_client(unix_fd);
             if (client_fd >= 0) {
@@ -160,12 +173,13 @@ int main() {
         }
     }
 
+    // Завершение работы
     history_log_event("SERVER_STOP", NULL, NULL);
     logger_write("SERVER STOPPED");
 
     close_socket(tcp_fd);
     close_socket(unix_fd);
-    unlink("/tmp/messenger.sock");
+    unlink("/tmp/messenger.sock");   // Удаляем файл Unix-сокета
     auth_cleanup();
     group_cleanup();
     hash_cleanup();
@@ -176,6 +190,7 @@ int main() {
     return 0;
 }
 
+// Обработка одного клиента (выполняется в отдельном потоке)
 void* handle_client(void* arg) {
     ClientThreadArgs* args = (ClientThreadArgs*)arg;
     int client_fd = args->fd;
@@ -184,8 +199,10 @@ void* handle_client(void* arg) {
     char buffer[1024];
 
     while (running) {
+        // Принимаем сообщение от клиента
         int received = receive_message(client_fd, buffer, sizeof(buffer));
         if (received <= 0) {
+            // Клиент отключился — удаляем из хеш-таблицы
             pthread_mutex_lock(&hash_mutex);
             ClientNode* node = hash_find_by_fd(client_fd);
             if (node && node->username[0] != '\0') {
@@ -198,15 +215,16 @@ void* handle_client(void* arg) {
             return NULL;
         }
 
-        buffer[strcspn(buffer, "\n")] = '\0';
+        buffer[strcspn(buffer, "\n")] = '\0';   // Убираем \n
         printf("[SERVER] Received from fd=%d: %s\n", client_fd, buffer);
 
+        // Находим себя в хеш-таблице
         pthread_mutex_lock(&hash_mutex);
         ClientNode* my_node = hash_find_by_fd(client_fd);
         pthread_mutex_unlock(&hash_mutex);
         if (!my_node) { close_socket(client_fd); return NULL; }
 
-        /* Расшифровка ENC:SEND */
+        // Расшифровка ENC:SEND 
         if (strncmp(buffer, "ENC:SEND ", 9) == 0) {
             char prefix[16], recipient[32], hex_cipher[1024];
             if (sscanf(buffer, "%15s %31s %1023s", prefix, recipient, hex_cipher) == 3) {
@@ -218,7 +236,7 @@ void* handle_client(void* arg) {
             }
         }
 
-        /* Расшифровка ENC:THREAD */
+        // Расшифровка ENC:THREAD 
         if (strncmp(buffer, "ENC:THREAD ", 11) == 0) {
             char prefix[16], recipient[32], hex_cipher[1024];
             if (sscanf(buffer, "%15s %31s %1023s", prefix, recipient, hex_cipher) == 3) {
@@ -230,7 +248,7 @@ void* handle_client(void* arg) {
             }
         }
 
-        /* REGISTER */
+        //Регистрация нового пользователя
         if (strncmp(buffer, "REGISTER ", 9) == 0) {
             char username[32], password[32];
             if (sscanf(buffer + 9, "%31s %31s", username, password) == 2) {

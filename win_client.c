@@ -1,8 +1,8 @@
-/*
- * win_client.c � ������ ����������� ��� Windows
- * ����������: cl win_client.c ws2_32.lib libcrypto.lib /Fe:win_client.exe
- * �������� ��������� � �������� �� Linux.
- * ������������ ������� ����� (UTF-8) � AES-128 ����������.
+﻿/*
+ * win_client.c — Клиент мессенджера для Windows
+ * Компиляция: cl win_client.c ws2_32.lib libcrypto.lib /Fe:win_client.exe
+ * Протокол совместим с сервером на Linux.
+ * Поддерживает русские буквы (UTF-8) и AES-128 шифрование.
  */
 
 #define _CRT_SECURE_NO_WARNINGS
@@ -17,31 +17,33 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
-#pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "libcrypto.lib")
+#pragma comment(lib, "ws2_32.lib")       // Линковка Winsock
+#pragma comment(lib, "libcrypto.lib")     // Линковка OpenSSL Crypto
 
-#define SERVER_PORT 7777
-#define BUFFER_SIZE 4096
+#define SERVER_PORT 7777     // Порт сервера
+#define BUFFER_SIZE 4096     // Размер буфера для приёма сообщений
 
-static SOCKET server_sock = INVALID_SOCKET;
-static int running = 1;
+static SOCKET server_sock = INVALID_SOCKET;  // Сокет соединения с сервером
+static int running = 1;                      // Флаг работы клиента
 
-/* ========== AES-128 ���������� ========== */
-static unsigned char aes_key[16];
-static unsigned char aes_iv[16];
-static int crypto_ready = 0;
+// AES-128 шифрование  
+static unsigned char aes_key[16];  // Ключ шифрования (16 байт = 128 бит)
+static unsigned char aes_iv[16];    // Вектор инициализации
+static int crypto_ready = 0;       // Флаг инициализации
 
+// Инициализация шифрования
 void crypto_init(const char* key_str) {
     memset(aes_key, 0, 16);
-    strncpy((char*)aes_key, key_str, 16);
-    memcpy(aes_iv, aes_key, 16);
+    strncpy((char*)aes_key, key_str, 16);   // Копируем ключ (до 16 символов)
+    memcpy(aes_iv, aes_key, 16);            // IV = ключ (упрощённо)
     crypto_ready = 1;
 }
 
+// Расшифровка hex-строки в текст
 char* crypto_decrypt(const char* hex_ciphertext) {
     if (!crypto_ready || !hex_ciphertext) return NULL;
     int hex_len = (int)strlen(hex_ciphertext);
-    int ciphertext_len = hex_len / 2;
+    int ciphertext_len = hex_len / 2;                    // Два hex-символа = 1 байт
     unsigned char* ciphertext = malloc(ciphertext_len);
     if (!ciphertext) return NULL;
     for (int i = 0; i < ciphertext_len; i++)
@@ -62,12 +64,13 @@ char* crypto_decrypt(const char* hex_ciphertext) {
     return (char*)plaintext;
 }
 
+// Зашифровать текст в hex-строку
 char* crypto_encrypt(const char* plaintext) {
     if (!crypto_ready || !plaintext) return NULL;
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!ctx) return NULL;
     int len = (int)strlen(plaintext);
-    int ciphertext_len = len + 16;
+    int ciphertext_len = len + 16;                                              // + один блок AES
     unsigned char* ciphertext = malloc(ciphertext_len);
     if (!ciphertext) { EVP_CIPHER_CTX_free(ctx); return NULL; }
     int out_len;
@@ -77,7 +80,7 @@ char* crypto_encrypt(const char* plaintext) {
     EVP_EncryptFinal_ex(ctx, ciphertext + total_len, &out_len);
     total_len += out_len;
     EVP_CIPHER_CTX_free(ctx);
-    char* hex = malloc(total_len * 2 + 1);
+    char* hex = malloc(total_len * 2 + 1);                      // Каждый байт → 2 hex-символа
     if (!hex) { free(ciphertext); return NULL; }
     for (int i = 0; i < total_len; i++)
         sprintf(hex + i * 2, "%02x", ciphertext[i]);
@@ -86,38 +89,43 @@ char* crypto_encrypt(const char* plaintext) {
     return hex;
 }
 
-/* ========== ������ ������ � UTF-8 ========== */
+/* ========== Чтение строки в UTF-8 ========== */
 int read_line_utf8(char* buf, int size) {
     wchar_t wbuf[1024];
     DWORD chars_read = 0;
     HANDLE h_input = GetStdHandle(STD_INPUT_HANDLE);
     if (!ReadConsoleW(h_input, wbuf, 1024, &chars_read, NULL)) return 0;
     if (chars_read == 0) return 0;
+    // Убираем \r\n
     if (wbuf[chars_read - 1] == L'\n') { chars_read--; wbuf[chars_read] = 0; }
     if (wbuf[chars_read - 1] == L'\r') { chars_read--; wbuf[chars_read] = 0; }
+    // Конвертируем Unicode → UTF-8
     int len = WideCharToMultiByte(CP_UTF8, 0, wbuf, chars_read, buf, size - 1, NULL, NULL);
     if (len <= 0) return 0;
     buf[len] = '\0';
     return 1;
 }
 
+// Подключение к TCP-серверу
 SOCKET connect_to_server(const char* ip, int port) {
-    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);               // Создаём TCP-сокет
     if (sock == INVALID_SOCKET) return INVALID_SOCKET;
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr(ip);
+    addr.sin_addr.s_addr = inet_addr(ip);                       // IP-строка → число
     if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
         closesocket(sock); return INVALID_SOCKET;
     }
     printf("[CLIENT] Connected to %s:%d\n", ip, port);
+    // Отключаем алгоритм Нейгла для мгновенной отправки мелких пакетов
     int flag = 1;
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(flag));
     return sock;
 }
 
+// Отправка сообщения (с гарантией отправки всех байт)
 int send_message(SOCKET sock, const char* message) {
     int len = (int)strlen(message);
     int total = 0;
@@ -129,25 +137,27 @@ int send_message(SOCKET sock, const char* message) {
     return total;
 }
 
+// Приём сообщения
 int receive_message(SOCKET sock, char* buffer, int size) {
     int received = recv(sock, buffer, size - 1, 0);
     if (received == SOCKET_ERROR) return -1;
-    if (received == 0) return 0;
+    if (received == 0) return 0;            // Сервер закрыл соединение
     buffer[received] = '\0';
     return received;
 }
 
+// Поток приёма сообщений от сервера
 DWORD WINAPI receiver_thread(LPVOID param) {
     (void)param;
     char buffer[BUFFER_SIZE];
     while (running) {
         int received = receive_message(server_sock, buffer, sizeof(buffer));
         if (received <= 0) { printf("\n[CLIENT] Server disconnected\n"); running = 0; exit(0); }
-        char* line = strtok(buffer, "\n");
+        char* line = strtok(buffer, "\n");           // Разбиваем ответ на строки
         while (line) {
             if (strlen(line) == 0) { line = strtok(NULL, "\n"); continue; }
 
-            /* ����������� ENC: */
+            /* Расшифровка ENC: */
             if (strncmp(line, "ENC:", 4) == 0) {
                 char* decrypted = crypto_decrypt(line + 4);
                 if (decrypted) {
@@ -157,23 +167,26 @@ DWORD WINAPI receiver_thread(LPVOID param) {
                 line = strtok(NULL, "\n");
                 continue;
             }
-
+            //Сообщения
             if (strncmp(line, "OK", 2) == 0 && strlen(line) <= 4)
                 printf("\r[OK]\n> ");
             else if (strncmp(line, "ERROR", 5) == 0)
                 printf("\r[Error] %s\n> ", line + 6);
             else if (strncmp(line, "LIST ", 5) == 0)
                 printf("\rOnline: %s\n> ", line + 5);
+            // Маркеры истории
             else if (strcmp(line, "HISTORY_BEGIN") == 0)
                 printf("\n=== History ===\n");
             else if (strcmp(line, "HISTORY_END") == 0)
                 printf("=== End ===\n> ");
             else if (strcmp(line, "HISTORY_EMPTY") == 0)
                 printf("\n(empty)\n> ");
+            // Маркеры офлайн-сообщений
             else if (strcmp(line, "OFFLINE_BEGIN") == 0)
                 printf("\n=== Missed messages ===\n");
             else if (strcmp(line, "OFFLINE_END") == 0)
                 printf("=== End ===\n> ");
+            // Уведомление о выключении сервера
             else if (strncmp(line, "SERVER_SHUTDOWN", 15) == 0)
             {
                 printf("\r[Server] %s\n", line);
@@ -184,13 +197,13 @@ DWORD WINAPI receiver_thread(LPVOID param) {
             {
                 printf("[Server] Bye!\n"); running = 0; exit(0);
             }
+            // Групповые ответы
             else if (strncmp(line, "GROUP_", 6) == 0)
                 printf("\r[%s]\n> ", line);
             else if (strncmp(line, "UNKNOWN", 7) == 0)
-            { /* ���������� */
-            }
+            { /* Игнорируем */}
             else
-                printf("\r%s\n> ", line);
+                printf("\r%s\n> ", line);  // Обычное сообщение
             fflush(stdout);
             line = strtok(NULL, "\n");
         }
@@ -199,21 +212,27 @@ DWORD WINAPI receiver_thread(LPVOID param) {
 }
 
 int main(int argc, char* argv[]) {
+    // IP сервера из аргумента или localhost
     const char* server_ip = "127.0.0.1";
     if (argc > 1) server_ip = argv[1];
 
+    // Настройка консоли на UTF-8
     SetConsoleCP(65001);
     SetConsoleOutputCP(65001);
 
+    // Инициализация Winsock
     WSADATA wsa_data;
     WSAStartup(MAKEWORD(2, 2), &wsa_data);
 
+    // Инициализация шифрования
     crypto_init("messenger2026key");
 
+    // Подключение к серверу
     printf("[CLIENT] Connecting to %s...\n", server_ip);
     server_sock = connect_to_server(server_ip, SERVER_PORT);
     if (server_sock == INVALID_SOCKET) { WSACleanup(); return 1; }
 
+    // Аутентификация
     char username[256], password[256];
     int logged_in = 0;
     while (!logged_in) {
@@ -238,12 +257,14 @@ int main(int argc, char* argv[]) {
         if (r > 0) { resp[strcspn(resp, "\n")] = '\0'; printf("[Server] %s\n", resp); if (strncmp(resp, "OK", 2) == 0) logged_in = 1; }
     }
 
+    // Запуск потока приёма сообщений
     HANDLE thread = CreateThread(NULL, 0, receiver_thread, NULL, 0, NULL);
     if (thread) CloseHandle(thread);
 
     printf("\nCommands: /msg, /list, /quit, /help, /history\n");
     printf("  /group create/join/msg\n");
 
+    // Главный цикл ввода команд
     char input[1024];
     while (running) {
         printf("> ");
@@ -292,7 +313,7 @@ int main(int argc, char* argv[]) {
         else if (strcmp(input, "/help") == 0) {
             printf("Commands: /msg, /list, /quit, /help, /history\n");
             printf("  /group create/join/msg, /register\n");
-            printf("  /thread Name Text � reply in thread\n");
+            printf("  /thread Name Text — reply in thread\n");
         }
         else if (strncmp(input, "/group create ", 14) == 0) {
             char cmd[512];
