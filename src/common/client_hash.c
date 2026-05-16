@@ -1,4 +1,4 @@
-﻿#include "client_hash.h"
+#include "client_hash.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

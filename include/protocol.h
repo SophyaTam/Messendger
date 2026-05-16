@@ -1,10 +1,10 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
-/* Парсинг команды SEND: извлекает получателя и текст */
+/* РџР°СЂСЃРёРЅРі РєРѕРјР°РЅРґС‹ SEND: РёР·РІР»РµРєР°РµС‚ РїРѕР»СѓС‡Р°С‚РµР»СЏ Рё С‚РµРєСЃС‚ */
 int protocol_parse_send(const char* buffer, char* recipient, char* message);
 
-/* Формирование ответа сервера */
+/* Р¤РѕСЂРјРёСЂРѕРІР°РЅРёРµ РѕС‚РІРµС‚Р° СЃРµСЂРІРµСЂР° */
 void protocol_make_ok(char* out);
 void protocol_make_error(char* out, const char* reason);
 void protocol_make_user_list(char* out, const char* users);

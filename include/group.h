@@ -13,17 +13,17 @@ typedef struct {
     int member_count;
 } Group;
 
-//Инициализировать модуль групп (загрузка из базы)
+//РРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°С‚СЊ РјРѕРґСѓР»СЊ РіСЂСѓРїРї (Р·Р°РіСЂСѓР·РєР° РёР· Р±Р°Р·С‹)
 int group_init(sqlite3* db);
-//Создать новую группу с паролем
+//РЎРѕР·РґР°С‚СЊ РЅРѕРІСѓСЋ РіСЂСѓРїРїСѓ СЃ РїР°СЂРѕР»РµРј
 int group_create(const char* name, const char* password, const char* creator);
-// Войти в группу
+// Р’РѕР№С‚Рё РІ РіСЂСѓРїРїСѓ
 int group_join(const char* name, const char* password, const char* username);
-//Получить список всех участников группы
+//РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє РІСЃРµС… СѓС‡Р°СЃС‚РЅРёРєРѕРІ РіСЂСѓРїРїС‹
 char* group_list_members(const char* name);
-//Проверить, состоит ли пользователь в группе
+//РџСЂРѕРІРµСЂРёС‚СЊ, СЃРѕСЃС‚РѕРёС‚ Р»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РІ РіСЂСѓРїРїРµ
 int group_is_member(const char* name, const char* username);
-//Получить список участников группы(кроме отправителя)
+//РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє СѓС‡Р°СЃС‚РЅРёРєРѕРІ РіСЂСѓРїРїС‹(РєСЂРѕРјРµ РѕС‚РїСЂР°РІРёС‚РµР»СЏ)
 char* group_get_recipients(const char* name, const char* sender);
 void group_cleanup(void);
 

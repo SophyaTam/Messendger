@@ -4,23 +4,23 @@
 #include <string.h>
 #include <stdlib.h>
 
-// Массив групп в памяти и счётчик
+// РњР°СЃСЃРёРІ РіСЂСѓРїРї РІ РїР°РјСЏС‚Рё Рё СЃС‡С‘С‚С‡РёРє
 static Group groups[MAX_GROUPS];
 static int group_count = 0;
-static sqlite3* db = NULL;      // Указатель на базу данных (передаётся из history.c)
+static sqlite3* db = NULL;      // РЈРєР°Р·Р°С‚РµР»СЊ РЅР° Р±Р°Р·Сѓ РґР°РЅРЅС‹С… (РїРµСЂРµРґР°С‘С‚СЃСЏ РёР· history.c)
 
-// Инициализация: создаём таблицы в SQLite и загружаем группы в память
+// РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ: СЃРѕР·РґР°С‘Рј С‚Р°Р±Р»РёС†С‹ РІ SQLite Рё Р·Р°РіСЂСѓР¶Р°РµРј РіСЂСѓРїРїС‹ РІ РїР°РјСЏС‚СЊ
 int group_init(sqlite3* database) {
     db = database;
 
-    // Таблица групп: имя + хеш пароля
+    // РўР°Р±Р»РёС†Р° РіСЂСѓРїРї: РёРјСЏ + С…РµС€ РїР°СЂРѕР»СЏ
     const char* sql_groups =
         "CREATE TABLE IF NOT EXISTS groups ("
         "  name TEXT PRIMARY KEY,"
         "  password_hash TEXT NOT NULL"
         ");";
 
-    // Таблица участников групп
+    // РўР°Р±Р»РёС†Р° СѓС‡Р°СЃС‚РЅРёРєРѕРІ РіСЂСѓРїРї
     const char* sql_members =
         "CREATE TABLE IF NOT EXISTS group_members ("
         "  group_name TEXT NOT NULL,"
@@ -28,7 +28,7 @@ int group_init(sqlite3* database) {
         "  PRIMARY KEY (group_name, username)"
         ");";
    
-    // Выполняем создание таблиц
+    // Р’С‹РїРѕР»РЅСЏРµРј СЃРѕР·РґР°РЅРёРµ С‚Р°Р±Р»РёС†
     char* err = NULL;
     if (sqlite3_exec(db, sql_groups, NULL, NULL, &err) != SQLITE_OK) {
         fprintf(stderr, "SQL error: %s\n", err);
@@ -41,7 +41,7 @@ int group_init(sqlite3* database) {
         return -1;
     }
 
-    // Загружаем все группы из базы в память
+    // Р—Р°РіСЂСѓР¶Р°РµРј РІСЃРµ РіСЂСѓРїРїС‹ РёР· Р±Р°Р·С‹ РІ РїР°РјСЏС‚СЊ
     const char* sql = "SELECT name, password_hash FROM groups;";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
@@ -58,13 +58,13 @@ int group_init(sqlite3* database) {
         sqlite3_finalize(stmt);
     }
 
-    // Загружаем участников групп
+    // Р—Р°РіСЂСѓР¶Р°РµРј СѓС‡Р°СЃС‚РЅРёРєРѕРІ РіСЂСѓРїРї
     const char* sql_m = "SELECT group_name, username FROM group_members;";
     if (sqlite3_prepare_v2(db, sql_m, -1, &stmt, NULL) == SQLITE_OK) {
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             const char* gname = (const char*)sqlite3_column_text(stmt, 0);
             const char* uname = (const char*)sqlite3_column_text(stmt, 1);
-            // Ищем группу в памяти и добавляем участника
+            // РС‰РµРј РіСЂСѓРїРїСѓ РІ РїР°РјСЏС‚Рё Рё РґРѕР±Р°РІР»СЏРµРј СѓС‡Р°СЃС‚РЅРёРєР°
             for (int i = 0; i < group_count; i++) {
                 if (strcmp(groups[i].name, gname) == 0 &&
                     groups[i].member_count < MAX_MEMBERS) {
@@ -82,19 +82,19 @@ int group_init(sqlite3* database) {
     return 0;
 }
 
-// Создать новую группу с паролем: 0 — успех, -1 — уже существует, -2 — нет места
+// РЎРѕР·РґР°С‚СЊ РЅРѕРІСѓСЋ РіСЂСѓРїРїСѓ СЃ РїР°СЂРѕР»РµРј: 0 вЂ” СѓСЃРїРµС…, -1 вЂ” СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚, -2 вЂ” РЅРµС‚ РјРµСЃС‚Р°
 int group_create(const char* name, const char* password, const char* creator) {
-    // Проверяем, нет ли уже группы с таким именем
+    // РџСЂРѕРІРµСЂСЏРµРј, РЅРµС‚ Р»Рё СѓР¶Рµ РіСЂСѓРїРїС‹ СЃ С‚Р°РєРёРј РёРјРµРЅРµРј
     for (int i = 0; i < group_count; i++) {
         if (strcmp(groups[i].name, name) == 0) return -1;
     }
     if (group_count >= MAX_GROUPS) return -2;
 
-    // Хешируем пароль
+    // РҐРµС€РёСЂСѓРµРј РїР°СЂРѕР»СЊ
     char hash[65];
     sha256_hash(password, hash);
 
-    // Сохраняем группу в базу
+    // РЎРѕС…СЂР°РЅСЏРµРј РіСЂСѓРїРїСѓ РІ Р±Р°Р·Сѓ
     const char* sql = "INSERT INTO groups (name, password_hash) VALUES (?, ?);";
     sqlite3_stmt* stmt;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
@@ -104,7 +104,7 @@ int group_create(const char* name, const char* password, const char* creator) {
         sqlite3_finalize(stmt);
     }
 
-    // Добавляем создателя как первого участника
+    // Р”РѕР±Р°РІР»СЏРµРј СЃРѕР·РґР°С‚РµР»СЏ РєР°Рє РїРµСЂРІРѕРіРѕ СѓС‡Р°СЃС‚РЅРёРєР°
     const char* sql2 = "INSERT INTO group_members (group_name, username) VALUES (?, ?);";
     if (sqlite3_prepare_v2(db, sql2, -1, &stmt, NULL) == SQLITE_OK) {
         sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
@@ -113,7 +113,7 @@ int group_create(const char* name, const char* password, const char* creator) {
         sqlite3_finalize(stmt);
     }
 
-    // Сохраняем в память
+    // РЎРѕС…СЂР°РЅСЏРµРј РІ РїР°РјСЏС‚СЊ
     strncpy(groups[group_count].name, name, sizeof(groups[group_count].name) - 1);
     strncpy(groups[group_count].password_hash, hash, sizeof(groups[group_count].password_hash) - 1);
     strncpy(groups[group_count].members[0], creator, sizeof(groups[group_count].members[0]) - 1);
@@ -124,22 +124,22 @@ int group_create(const char* name, const char* password, const char* creator) {
     return 0;
 }
 
-// Войти в группу (проверка пароля): 0 — успех, -1 — уже в группе, -2 — неверный пароль, -3 — группа полна, -4 — не найдена
+// Р’РѕР№С‚Рё РІ РіСЂСѓРїРїСѓ (РїСЂРѕРІРµСЂРєР° РїР°СЂРѕР»СЏ): 0 вЂ” СѓСЃРїРµС…, -1 вЂ” СѓР¶Рµ РІ РіСЂСѓРїРїРµ, -2 вЂ” РЅРµРІРµСЂРЅС‹Р№ РїР°СЂРѕР»СЊ, -3 вЂ” РіСЂСѓРїРїР° РїРѕР»РЅР°, -4 вЂ” РЅРµ РЅР°Р№РґРµРЅР°
 int group_join(const char* name, const char* password, const char* username) {
     for (int i = 0; i < group_count; i++) {
         if (strcmp(groups[i].name, name) == 0) {
-            // Проверяем пароль
+            // РџСЂРѕРІРµСЂСЏРµРј РїР°СЂРѕР»СЊ
             char hash[65];
             sha256_hash(password, hash);
             if (strcmp(groups[i].password_hash, hash) != 0) return -2;
 
-            // Проверяем, не участник ли уже
+            // РџСЂРѕРІРµСЂСЏРµРј, РЅРµ СѓС‡Р°СЃС‚РЅРёРє Р»Рё СѓР¶Рµ
             for (int j = 0; j < groups[i].member_count; j++) {
                 if (strcmp(groups[i].members[j], username) == 0) return -1;
             }
             if (groups[i].member_count >= MAX_MEMBERS) return -3;
 
-            // Сохраняем в базу
+            // РЎРѕС…СЂР°РЅСЏРµРј РІ Р±Р°Р·Сѓ
             const char* sql = "INSERT INTO group_members (group_name, username) VALUES (?, ?);";
             sqlite3_stmt* stmt;
             if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
@@ -149,7 +149,7 @@ int group_join(const char* name, const char* password, const char* username) {
                 sqlite3_finalize(stmt);
             }
 
-            // Добавляем в память
+            // Р”РѕР±Р°РІР»СЏРµРј РІ РїР°РјСЏС‚СЊ
             strncpy(groups[i].members[groups[i].member_count], username,
                 sizeof(groups[i].members[groups[i].member_count]) - 1);
             groups[i].member_count++;
@@ -160,7 +160,7 @@ int group_join(const char* name, const char* password, const char* username) {
     return -4;
 }
 
-// Получить список всех участников группы (строка через пробел)
+// РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє РІСЃРµС… СѓС‡Р°СЃС‚РЅРёРєРѕРІ РіСЂСѓРїРїС‹ (СЃС‚СЂРѕРєР° С‡РµСЂРµР· РїСЂРѕР±РµР»)
 char* group_list_members(const char* name) {
     for (int i = 0; i < group_count; i++) {
         if (strcmp(groups[i].name, name) == 0) {
@@ -176,7 +176,7 @@ char* group_list_members(const char* name) {
     return NULL;
 }
 
-// Проверить, состоит ли пользователь в группе
+// РџСЂРѕРІРµСЂРёС‚СЊ, СЃРѕСЃС‚РѕРёС‚ Р»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РІ РіСЂСѓРїРїРµ
 int group_is_member(const char* name, const char* username) {
     for (int i = 0; i < group_count; i++) {
         if (strcmp(groups[i].name, name) == 0) {
@@ -188,13 +188,13 @@ int group_is_member(const char* name, const char* username) {
     return 0;
 }
 
-// Получить список участников группы, кроме отправителя (для рассылки)
+// РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє СѓС‡Р°СЃС‚РЅРёРєРѕРІ РіСЂСѓРїРїС‹, РєСЂРѕРјРµ РѕС‚РїСЂР°РІРёС‚РµР»СЏ (РґР»СЏ СЂР°СЃСЃС‹Р»РєРё)
 char* group_get_recipients(const char* name, const char* sender) {
     for (int i = 0; i < group_count; i++) {
         if (strcmp(groups[i].name, name) == 0) {
             char* result = malloc(512);
             result[0] = '\0';
-            // Собираем всех, кроме sender
+            // РЎРѕР±РёСЂР°РµРј РІСЃРµС…, РєСЂРѕРјРµ sender
             for (int j = 0; j < groups[i].member_count; j++) {
                 if (strcmp(groups[i].members[j], sender) != 0) {
                     if (strlen(result) > 0) strcat(result, " ");
@@ -207,7 +207,7 @@ char* group_get_recipients(const char* name, const char* sender) {
     return NULL;
 }
 
-// Очистка памяти (сбрасываем счётчик, группы остаются в базе)
+// РћС‡РёСЃС‚РєР° РїР°РјСЏС‚Рё (СЃР±СЂР°СЃС‹РІР°РµРј СЃС‡С‘С‚С‡РёРє, РіСЂСѓРїРїС‹ РѕСЃС‚Р°СЋС‚СЃСЏ РІ Р±Р°Р·Рµ)
 void group_cleanup(void) {
     group_count = 0;
 }

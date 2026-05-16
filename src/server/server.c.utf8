@@ -1,0 +1,70 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <signal.h>
+#include <pthread.h>
+#include <poll.h>
+#include "socket_utils.h"
+#include "logger.h"
+#include "auth.h"
+#include "protocol.h"
+#include "history.h"
+#include "crypto.h"
+#include "group.h"
+#include "client_hash.h"
+
+#define MAX_CLIENTS 10     // РњР°РєСЃРёРјР°Р»СЊРЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ РѕРґРЅРѕРІСЂРµРјРµРЅРЅС‹С… РєР»РёРµРЅС‚РѕРІ
+#define PORT 7777           // РџРѕСЂС‚ СЃРµСЂРІРµСЂР°
+
+static int running = 1;                     // Р¤Р»Р°Рі СЂР°Р±РѕС‚С‹ СЃРµСЂРІРµСЂР° (0 = Р·Р°РІРµСЂС€РµРЅРёРµ)
+static int server_tcp_fd = -1;              // Р”РµСЃРєСЂРёРїС‚РѕСЂ TCP-СЃРѕРєРµС‚Р°
+static int server_unix_fd = -1;             // Р”РµСЃРєСЂРёРїС‚РѕСЂ Unix-СЃРѕРєРµС‚Р°
+
+/* РњСЊСЋС‚РµРєСЃ РґР»СЏ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё РґРѕСЃС‚СѓРїР° Рє С…РµС€-С‚Р°Р±Р»РёС†Рµ */
+static pthread_mutex_t hash_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* РЎС‚СЂСѓРєС‚СѓСЂР° РґР»СЏ РїРµСЂРµРґР°С‡Рё РґРµСЃРєСЂРёРїС‚РѕСЂР° РІ  РЅРѕРІС‹Р№ РїРѕС‚РѕРє */
+typedef struct {
+    int fd;
+} ClientThreadArgs;
+
+/* РџСЂРѕС‚РѕС‚РёРї С„СѓРЅРєС†РёРё РѕР±СЂР°Р±РѕС‚РєРё РєР»РёРµРЅС‚Р° */
+void* handle_client(void* arg);
+
+// РћР±СЂР°Р±РѕС‚С‡РёРє СЃРёРіРЅР°Р»РѕРІ (SIGINT, SIGTERM, SIGHUP)
+// РџСЂРё РїРѕР»СѓС‡РµРЅРёРё СЃРёРіРЅР°Р»Р° РѕРїРѕРІРµС‰Р°РµС‚ РІСЃРµС… РєР»РёРµРЅС‚РѕРІ Рё Р·Р°РІРµСЂС€Р°РµС‚ СЃРµСЂРІРµСЂ
+void handle_signal(int sig) {
+    (void)sig;
+    printf("\n[SERVER] Received signal %d, shutting down...\n", sig);
+    running = 0;
+
+    /* РћС‚РїСЂР°РІРёС‚СЊ СѓРІРµРґРѕРјР»РµРЅРёРµ РІСЃРµРј РєР»РёРµРЅС‚Р°Рј */
+    pthread_mutex_lock(&hash_mutex);
+    char* userlist = hash_get_online_list();
+    if (userlist) {
+        /* РџСЂРѕС…РѕРґРёРј РїРѕ РІСЃРµРј Рё РѕС‚РїСЂР°РІР»СЏРµРј */
+        char* tok = strtok(userlist, " ");      // Р Р°Р·Р±РёРІР°РµРј СЃРїРёСЃРѕРє РЅР° РёРјРµРЅР°
+        while (tok) {
+            int fd = hash_find_fd_by_name(tok);  // РќР°С…РѕРґРёРј СЃРѕРєРµС‚ РєР»РёРµРЅС‚Р° РїРѕ РёРјРµРЅРё
+            if (fd >= 0) {
+                send_message(fd, "SERVER_SHUTDOWN РЎРµСЂРІРµСЂ РІС‹РєР»СЋС‡Р°РµС‚СЃСЏ. Р”Рѕ СЃРІРёРґР°РЅРёСЏ!\n");
+            }
+            tok = strtok(NULL, " ");
+        }
+        free(userlist);
+    }
+    pthread_mutex_unlock(&hash_mutex);
+
+    // Р—Р°РєСЂС‹РІР°РµРј СЃРµСЂРІРµСЂРЅС‹Рµ СЃРѕРєРµС‚С‹ РґР»СЏ РІС‹С…РѕРґР° РёР· poll()
+    if (server_tcp_fd >= 0) close(server_tcp_fd);
+    if (server_unix_fd >= 0) close(server_unix_fd);
+}
+
+int main() {
+    // Р РµРіРёСЃС‚СЂРёСЂСѓРµРј РѕР±СЂР°Р±РѕС‚С‡РёРєРё СЃРёРіРЅР°Р»РѕРІ
+    signal(SIGINT, handle_signal);    // Ctrl+C
+    signal(SIGTERM, handle_signal);   // kill
+    signal(SIGHUP, handle_signal);    // РћР±СЂС‹РІ СЃРІСЏР·Рё
+
+    // Р

@@ -8,9 +8,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-// Создать TCP-сокет, привязать к порту, начать слушать
-// port — номер порта (7777)
-// Возвращает файловый дескриптор сокета или -1 при ошибке
+// РЎРѕР·РґР°С‚СЊ TCP-СЃРѕРєРµС‚, РїСЂРёРІСЏР·Р°С‚СЊ Рє РїРѕСЂС‚Сѓ, РЅР°С‡Р°С‚СЊ СЃР»СѓС€Р°С‚СЊ
+// port вЂ” РЅРѕРјРµСЂ РїРѕСЂС‚Р° (7777)
+// Р’РѕР·РІСЂР°С‰Р°РµС‚ С„Р°Р№Р»РѕРІС‹Р№ РґРµСЃРєСЂРёРїС‚РѕСЂ СЃРѕРєРµС‚Р° РёР»Рё -1 РїСЂРё РѕС€РёР±РєРµ
 int create_server_socket(int port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -18,25 +18,25 @@ int create_server_socket(int port) {
         return -1;
     }
 
-    // Разрешаем переиспользовать адрес после перезапуска сервера
+    // Р Р°Р·СЂРµС€Р°РµРј РїРµСЂРµРёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ Р°РґСЂРµСЃ РїРѕСЃР»Рµ РїРµСЂРµР·Р°РїСѓСЃРєР° СЃРµСЂРІРµСЂР°
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    // Заполняем структуру адреса: IPv4, любой IP, указанный порт
+    // Р—Р°РїРѕР»РЅСЏРµРј СЃС‚СЂСѓРєС‚СѓСЂСѓ Р°РґСЂРµСЃР°: IPv4, Р»СЋР±РѕР№ IP, СѓРєР°Р·Р°РЅРЅС‹Р№ РїРѕСЂС‚
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;      // Слушать на всех сетевых интерфейсах
-    addr.sin_port = htons(port);            // Порт в сетевом порядке байт
+    addr.sin_addr.s_addr = INADDR_ANY;      // РЎР»СѓС€Р°С‚СЊ РЅР° РІСЃРµС… СЃРµС‚РµРІС‹С… РёРЅС‚РµСЂС„РµР№СЃР°С…
+    addr.sin_port = htons(port);            // РџРѕСЂС‚ РІ СЃРµС‚РµРІРѕРј РїРѕСЂСЏРґРєРµ Р±Р°Р№С‚
 
-    // Привязываем сокет к адресу
+    // РџСЂРёРІСЏР·С‹РІР°РµРј СЃРѕРєРµС‚ Рє Р°РґСЂРµСЃСѓ
     if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("bind");
         close(fd);
         return -1;
     }
 
-    // Переводим сокет в режим прослушивания (очередь до 10 подключений)
+    // РџРµСЂРµРІРѕРґРёРј СЃРѕРєРµС‚ РІ СЂРµР¶РёРј РїСЂРѕСЃР»СѓС€РёРІР°РЅРёСЏ (РѕС‡РµСЂРµРґСЊ РґРѕ 10 РїРѕРґРєР»СЋС‡РµРЅРёР№)
     if (listen(fd, 10) < 0) {
         perror("listen");
         close(fd);
@@ -47,18 +47,18 @@ int create_server_socket(int port) {
     return fd;
 }
 
-// Создать Unix Domain Socket (для локального режима) path — путь к файлу сокета (/tmp/messenger.sock)
+// РЎРѕР·РґР°С‚СЊ Unix Domain Socket (РґР»СЏ Р»РѕРєР°Р»СЊРЅРѕРіРѕ СЂРµР¶РёРјР°) path вЂ” РїСѓС‚СЊ Рє С„Р°Р№Р»Сѓ СЃРѕРєРµС‚Р° (/tmp/messenger.sock)
 int create_unix_server_socket(const char* path) {
-    // Создаём сокет: Unix-домен, потоковый
+    // РЎРѕР·РґР°С‘Рј СЃРѕРєРµС‚: Unix-РґРѕРјРµРЅ, РїРѕС‚РѕРєРѕРІС‹Р№
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
         perror("socket");
         return -1;
     }
 
-    unlink(path);  // Удаляем старый файл сокета, если остался
+    unlink(path);  // РЈРґР°Р»СЏРµРј СЃС‚Р°СЂС‹Р№ С„Р°Р№Р» СЃРѕРєРµС‚Р°, РµСЃР»Рё РѕСЃС‚Р°Р»СЃСЏ
 
-    // Заполняем структуру адреса: Unix-семейство, путь к файлу
+    // Р—Р°РїРѕР»РЅСЏРµРј СЃС‚СЂСѓРєС‚СѓСЂСѓ Р°РґСЂРµСЃР°: Unix-СЃРµРјРµР№СЃС‚РІРѕ, РїСѓС‚СЊ Рє С„Р°Р№Р»Сѓ
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
@@ -80,12 +80,12 @@ int create_unix_server_socket(const char* path) {
     return fd;
 }
 
-// Принять входящее подключение от клиента server_fd — дескриптор слушающего сокета
-// Возвращает новый дескриптор для общения с клиентом
+// РџСЂРёРЅСЏС‚СЊ РІС…РѕРґСЏС‰РµРµ РїРѕРґРєР»СЋС‡РµРЅРёРµ РѕС‚ РєР»РёРµРЅС‚Р° server_fd вЂ” РґРµСЃРєСЂРёРїС‚РѕСЂ СЃР»СѓС€Р°СЋС‰РµРіРѕ СЃРѕРєРµС‚Р°
+// Р’РѕР·РІСЂР°С‰Р°РµС‚ РЅРѕРІС‹Р№ РґРµСЃРєСЂРёРїС‚РѕСЂ РґР»СЏ РѕР±С‰РµРЅРёСЏ СЃ РєР»РёРµРЅС‚РѕРј
 int accept_client(int server_fd) {
     struct sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
-    // accept() блокируется, пока не подключится клиент
+    // accept() Р±Р»РѕРєРёСЂСѓРµС‚СЃСЏ, РїРѕРєР° РЅРµ РїРѕРґРєР»СЋС‡РёС‚СЃСЏ РєР»РёРµРЅС‚
     int client_fd = accept(server_fd, (struct sockaddr*)&addr, &addr_len);
     if (client_fd < 0) {
         perror("accept");
@@ -95,8 +95,8 @@ int accept_client(int server_fd) {
     return client_fd;
 }
 
-// Подключиться к TCP-серверу (клиентская функция)
-// ip — IP-адрес сервера, port — порт
+// РџРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ Рє TCP-СЃРµСЂРІРµСЂСѓ (РєР»РёРµРЅС‚СЃРєР°СЏ С„СѓРЅРєС†РёСЏ)
+// ip вЂ” IP-Р°РґСЂРµСЃ СЃРµСЂРІРµСЂР°, port вЂ” РїРѕСЂС‚
 int connect_to_server(const char* ip, int port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -108,9 +108,9 @@ int connect_to_server(const char* ip, int port) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    inet_pton(AF_INET, ip, &addr.sin_addr);     // Преобразуем IP-строку в структуру
+    inet_pton(AF_INET, ip, &addr.sin_addr);     // РџСЂРµРѕР±СЂР°Р·СѓРµРј IP-СЃС‚СЂРѕРєСѓ РІ СЃС‚СЂСѓРєС‚СѓСЂСѓ
 
-    // Устанавливаем соединение с сервером
+    // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЃРѕРµРґРёРЅРµРЅРёРµ СЃ СЃРµСЂРІРµСЂРѕРј
     if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("connect");
         close(fd);
@@ -121,7 +121,7 @@ int connect_to_server(const char* ip, int port) {
     return fd;
 }
 
-// Подключиться к Unix-серверу (клиентская функция, локальный режим)
+// РџРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ Рє Unix-СЃРµСЂРІРµСЂСѓ (РєР»РёРµРЅС‚СЃРєР°СЏ С„СѓРЅРєС†РёСЏ, Р»РѕРєР°Р»СЊРЅС‹Р№ СЂРµР¶РёРј)
 int connect_to_unix_server(const char* path) {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -144,20 +144,20 @@ int connect_to_unix_server(const char* path) {
     return fd;
 }
 
-// Отправить сообщение в сокет
-// fd — дескриптор сокета, message — строка для отправки
+// РћС‚РїСЂР°РІРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ РІ СЃРѕРєРµС‚
+// fd вЂ” РґРµСЃРєСЂРёРїС‚РѕСЂ СЃРѕРєРµС‚Р°, message вЂ” СЃС‚СЂРѕРєР° РґР»СЏ РѕС‚РїСЂР°РІРєРё
 int send_message(int fd, const char* message) {
     int len = strlen(message);
-    int sent = send(fd, message, len, 0);  // Системный вызов send()
+    int sent = send(fd, message, len, 0);  // РЎРёСЃС‚РµРјРЅС‹Р№ РІС‹Р·РѕРІ send()
     if (sent < 0) {
         perror("send");
     }
     return sent;
 }
 
-// Принять сообщение из сокета
-// fd — дескриптор, buffer — куда записать, buffer_size — размер буфера
-// Возвращает количество принятых байт, 0 — соединение закрыто, -1 — ошибка
+// РџСЂРёРЅСЏС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ РёР· СЃРѕРєРµС‚Р°
+// fd вЂ” РґРµСЃРєСЂРёРїС‚РѕСЂ, buffer вЂ” РєСѓРґР° Р·Р°РїРёСЃР°С‚СЊ, buffer_size вЂ” СЂР°Р·РјРµСЂ Р±СѓС„РµСЂР°
+// Р’РѕР·РІСЂР°С‰Р°РµС‚ РєРѕР»РёС‡РµСЃС‚РІРѕ РїСЂРёРЅСЏС‚С‹С… Р±Р°Р№С‚, 0 вЂ” СЃРѕРµРґРёРЅРµРЅРёРµ Р·Р°РєСЂС‹С‚Рѕ, -1 вЂ” РѕС€РёР±РєР°
 int receive_message(int fd, char* buffer, int buffer_size) {
     int received = recv(fd, buffer, buffer_size - 1, 0);
     if (received < 0) {
@@ -167,14 +167,14 @@ int receive_message(int fd, char* buffer, int buffer_size) {
     if (received == 0) {
         return 0;
     }
-    buffer[received] = '\0';   // Завершаем строку
+    buffer[received] = '\0';   // Р—Р°РІРµСЂС€Р°РµРј СЃС‚СЂРѕРєСѓ
     return received;
 }
 
-// Закрыть сокет
+// Р—Р°РєСЂС‹С‚СЊ СЃРѕРєРµС‚
 void close_socket(int fd) {
     if (fd >= 0) {
-        close(fd);     // Системный вызов close()
+        close(fd);     // РЎРёСЃС‚РµРјРЅС‹Р№ РІС‹Р·РѕРІ close()
         printf("[SOCKET] Closed fd=%d\n", fd);
     }
 }

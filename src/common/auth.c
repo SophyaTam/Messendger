@@ -4,29 +4,29 @@
 #include <string.h>
 #include <openssl/sha.h>
 
-// Структура пользователя: имя + SHA-256 хеш пароля (64 символа hex + '\0')
+// РЎС‚СЂСѓРєС‚СѓСЂР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ: РёРјСЏ + SHA-256 С…РµС€ РїР°СЂРѕР»СЏ (64 СЃРёРјРІРѕР»Р° hex + '\0')
 typedef struct {
     char username[32];
     char hash[65];
 } User;
 
-// Массив пользователей и их количество
+// РњР°СЃСЃРёРІ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ Рё РёС… РєРѕР»РёС‡РµСЃС‚РІРѕ
 static User *users = NULL;
 static int user_count = 0;
 
 
-// Вычисление SHA-256 хеша строки  input — исходная строка, output_hex — буфер на 65 байт для hex-результата
+// Р’С‹С‡РёСЃР»РµРЅРёРµ SHA-256 С…РµС€Р° СЃС‚СЂРѕРєРё  input вЂ” РёСЃС…РѕРґРЅР°СЏ СЃС‚СЂРѕРєР°, output_hex вЂ” Р±СѓС„РµСЂ РЅР° 65 Р±Р°Р№С‚ РґР»СЏ hex-СЂРµР·СѓР»СЊС‚Р°С‚Р°
 void sha256_hash(const char *input, char *output_hex) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];           // 32 байта сырого хеша
-    SHA256((unsigned char *)input, strlen(input), hash);        // Вычисляем SHA-256
-    // Преобразуем каждый байт в два hex-символа
+    unsigned char hash[SHA256_DIGEST_LENGTH];           // 32 Р±Р°Р№С‚Р° СЃС‹СЂРѕРіРѕ С…РµС€Р°
+    SHA256((unsigned char *)input, strlen(input), hash);        // Р’С‹С‡РёСЃР»СЏРµРј SHA-256
+    // РџСЂРµРѕР±СЂР°Р·СѓРµРј РєР°Р¶РґС‹Р№ Р±Р°Р№С‚ РІ РґРІР° hex-СЃРёРјРІРѕР»Р°
     for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
         sprintf(output_hex + (i * 2), "%02x", hash[i]);
     }
-    output_hex[64] = '\0';          // Завершаем строку
+    output_hex[64] = '\0';          // Р—Р°РІРµСЂС€Р°РµРј СЃС‚СЂРѕРєСѓ
 }
 
-// Загрузка пользователей из файла passwd (формат: login:password)
+// Р—Р°РіСЂСѓР·РєР° РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РёР· С„Р°Р№Р»Р° passwd (С„РѕСЂРјР°С‚: login:password)
 int auth_init(const char *passwd_file) {
     FILE *f = fopen(passwd_file, "r");
     if (!f) {
@@ -34,30 +34,30 @@ int auth_init(const char *passwd_file) {
         return -1;
     }
 
-    // Считаем количество строк (пользователей)
+    // РЎС‡РёС‚Р°РµРј РєРѕР»РёС‡РµСЃС‚РІРѕ СЃС‚СЂРѕРє (РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№)
     user_count = 0;
     char line[128];
     while (fgets(line, sizeof(line), f)) {
         if (strlen(line) > 1) user_count++;
     }
-    rewind(f);      // Возвращаемся в начало файла
+    rewind(f);      // Р’РѕР·РІСЂР°С‰Р°РµРјСЃСЏ РІ РЅР°С‡Р°Р»Рѕ С„Р°Р№Р»Р°
 
-    // Выделяем память под массив пользователей
+    // Р’С‹РґРµР»СЏРµРј РїР°РјСЏС‚СЊ РїРѕРґ РјР°СЃСЃРёРІ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№
     users = malloc(sizeof(User) * user_count);
     if (!users) {
         fclose(f);
         return -1;
     }
 
-    // Читаем и парсим каждую строку
+    // Р§РёС‚Р°РµРј Рё РїР°СЂСЃРёРј РєР°Р¶РґСѓСЋ СЃС‚СЂРѕРєСѓ
     int i = 0;
     while (fgets(line, sizeof(line), f) && i < user_count) {
-        line[strcspn(line, "\n")] = '\0';       // Убираем \n
-        char *colon = strchr(line, ':');        // Ищем разделитель ':'
-        if (!colon) continue;                   // Пропускаем битые строки
-        *colon = '\0';                          // Разделяем на логин и пароль
+        line[strcspn(line, "\n")] = '\0';       // РЈР±РёСЂР°РµРј \n
+        char *colon = strchr(line, ':');        // РС‰РµРј СЂР°Р·РґРµР»РёС‚РµР»СЊ ':'
+        if (!colon) continue;                   // РџСЂРѕРїСѓСЃРєР°РµРј Р±РёС‚С‹Рµ СЃС‚СЂРѕРєРё
+        *colon = '\0';                          // Р Р°Р·РґРµР»СЏРµРј РЅР° Р»РѕРіРёРЅ Рё РїР°СЂРѕР»СЊ
         strncpy(users[i].username, line, sizeof(users[i].username) - 1);
-        sha256_hash(colon + 1, users[i].hash);  // Хешируем пароль и сохраняем
+        sha256_hash(colon + 1, users[i].hash);  // РҐРµС€РёСЂСѓРµРј РїР°СЂРѕР»СЊ Рё СЃРѕС…СЂР°РЅСЏРµРј
         i++;
     }
 
@@ -66,12 +66,12 @@ int auth_init(const char *passwd_file) {
     return 0;
 }
 
-// Проверка логина и пароля: 1 — успех, 0 — неверный пароль, -1 — пользователь не найден
+// РџСЂРѕРІРµСЂРєР° Р»РѕРіРёРЅР° Рё РїР°СЂРѕР»СЏ: 1 вЂ” СѓСЃРїРµС…, 0 вЂ” РЅРµРІРµСЂРЅС‹Р№ РїР°СЂРѕР»СЊ, -1 вЂ” РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ
 int auth_check(const char *username, const char *password) {
     char hash[65];
-    sha256_hash(password, hash);            // Хешируем введённый пароль
+    sha256_hash(password, hash);            // РҐРµС€РёСЂСѓРµРј РІРІРµРґС‘РЅРЅС‹Р№ РїР°СЂРѕР»СЊ
 
-    // Ищем пользователя и сверяем хеши
+    // РС‰РµРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ Рё СЃРІРµСЂСЏРµРј С…РµС€Рё
     for (int i = 0; i < user_count; i++) {
         if (strcmp(users[i].username, username) == 0) {
             if (strcmp(users[i].hash, hash) == 0) {
@@ -84,21 +84,21 @@ int auth_check(const char *username, const char *password) {
     return -1;
 }
 
-// Регистрация нового пользователя: 0 — успех, -1 — уже существует, -2 — ошибка файла
+// Р РµРіРёСЃС‚СЂР°С†РёСЏ РЅРѕРІРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ: 0 вЂ” СѓСЃРїРµС…, -1 вЂ” СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚, -2 вЂ” РѕС€РёР±РєР° С„Р°Р№Р»Р°
 int auth_register(const char* username, const char* password) {
-    // Проверяем, нет ли уже такого пользователя
+    // РџСЂРѕРІРµСЂСЏРµРј, РЅРµС‚ Р»Рё СѓР¶Рµ С‚Р°РєРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
     for (int i = 0; i < user_count; i++) {
         if (strcmp(users[i].username, username) == 0) return -1;
     }
 
-    // Дописываем в файл passwd (пароль сохраняется открытым)
+    // Р”РѕРїРёСЃС‹РІР°РµРј РІ С„Р°Р№Р» passwd (РїР°СЂРѕР»СЊ СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РѕС‚РєСЂС‹С‚С‹Рј)
     FILE* f = fopen("data/passwd", "a");
     if (!f) return -2;
 
     fprintf(f, "%s:%s\n", username, password);
     fclose(f);
 
-    // Добавляем в память (хеш пароля)
+    // Р”РѕР±Р°РІР»СЏРµРј РІ РїР°РјСЏС‚СЊ (С…РµС€ РїР°СЂРѕР»СЏ)
     users = realloc(users, sizeof(User) * (user_count + 1));
     strncpy(users[user_count].username, username, sizeof(users[user_count].username) - 1);
     sha256_hash(password, users[user_count].hash);
@@ -108,7 +108,7 @@ int auth_register(const char* username, const char* password) {
     return 0;
 }
 
-// Освобождение памяти
+// РћСЃРІРѕР±РѕР¶РґРµРЅРёРµ РїР°РјСЏС‚Рё
 void auth_cleanup(void) {
     if (users) {
         free(users);

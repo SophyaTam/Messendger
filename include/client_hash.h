@@ -3,7 +3,7 @@
 
 #define HASH_SIZE 256
 
-/** Узел хеш-таблицы */
+/** РЈР·РµР» С…РµС€-С‚Р°Р±Р»РёС†С‹ */
 typedef struct ClientNode {
     char username[32];
     int fd;
@@ -11,35 +11,35 @@ typedef struct ClientNode {
     struct ClientNode* next;
 } ClientNode;
 
-//Инициализировать хеш-таблицу
+//РРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°С‚СЊ С…РµС€-С‚Р°Р±Р»РёС†Сѓ
 void hash_init(void);
 
-// Добавить клиента в таблицу 
+// Р”РѕР±Р°РІРёС‚СЊ РєР»РёРµРЅС‚Р° РІ С‚Р°Р±Р»РёС†Сѓ 
 ClientNode* hash_add(const char* username, int fd, int logged_in);
 
-//Найти клиента по fd
+//РќР°Р№С‚Рё РєР»РёРµРЅС‚Р° РїРѕ fd
 
 ClientNode* hash_find_by_fd(int fd);
 
-// Найти fd онлайн-клиента по имени
+// РќР°Р№С‚Рё fd РѕРЅР»Р°Р№РЅ-РєР»РёРµРЅС‚Р° РїРѕ РёРјРµРЅРё
 
 int hash_find_fd_by_name(const char* username);
 
-//Удалить клиента из таблицы по fd
+//РЈРґР°Р»РёС‚СЊ РєР»РёРµРЅС‚Р° РёР· С‚Р°Р±Р»РёС†С‹ РїРѕ fd
 
 void hash_remove(int fd);
 
-//Получить список онлайн-пользователей
+//РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє РѕРЅР»Р°Р№РЅ-РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№
 char* hash_get_online_list(void);
 
-//Обновить статус клиента (имя, logged_in)
+//РћР±РЅРѕРІРёС‚СЊ СЃС‚Р°С‚СѓСЃ РєР»РёРµРЅС‚Р° (РёРјСЏ, logged_in)
 
 void hash_update(int fd, const char* username, int logged_in);
 
-//Получить количество онлайн-клиентов
+//РџРѕР»СѓС‡РёС‚СЊ РєРѕР»РёС‡РµСЃС‚РІРѕ РѕРЅР»Р°Р№РЅ-РєР»РёРµРЅС‚РѕРІ
 int hash_count(void);
 
-//Очистить таблицу
+//РћС‡РёСЃС‚РёС‚СЊ С‚Р°Р±Р»РёС†Сѓ
 void hash_cleanup(void);
 
 #endif

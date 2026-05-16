@@ -1,13 +1,13 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-/* Инициализировать лог-файл */
+/* РРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°С‚СЊ Р»РѕРі-С„Р°Р№Р» */
 int logger_init(const char* filename);
 
-/* Записать сообщение в лог */
+/* Р—Р°РїРёСЃР°С‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ РІ Р»РѕРі */
 void logger_write(const char* format, ...);
 
-/* Закрыть лог-файл */
+/* Р—Р°РєСЂС‹С‚СЊ Р»РѕРі-С„Р°Р№Р» */
 void logger_close(void);
 
 #endif

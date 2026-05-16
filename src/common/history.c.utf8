@@ -1,0 +1,10 @@
+#include "history.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <sqlite3.h>
+
+static sqlite3* db = NULL; // РЈРєР°Р·Р°С‚РµР»СЊ РЅР° Р±Р°Р·Сѓ РґР°РЅРЅС‹С… SQLite
+
+// Р

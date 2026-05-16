@@ -1,0 +1,26 @@
+/*
+ * nclient.c вЂ” Ncurses messenger client
+ * Build: gcc nclient.c ../common/socket_utils.c ../common/crypto.c -o nclient -lncursesw -lssl -lcrypto -I../../include
+ */
+
+#include <ncurses.h>
+#include <locale.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+#include <unistd.h>
+#include "../../include/socket_utils.h"
+#include "../../include/crypto.h"
+
+#define PORT 7777           // РџРѕСЂС‚ СЃРµСЂРІРµСЂР°
+#define MAX_MSG 200         // РњР°РєСЃРёРјСѓРј С…СЂР°РЅРёРјС‹С… СЃРѕРѕР±С‰РµРЅРёР№ РІ РёСЃС‚РѕСЂРёРё С‡Р°С‚Р°
+#define MSG_LEN 256         // РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ РґР»РёРЅР° РѕРґРЅРѕРіРѕ СЃРѕРѕР±С‰РµРЅРёСЏ
+
+static int server_fd;       // РЎРѕРєРµС‚ СЃРѕРµРґРёРЅРµРЅРёСЏ СЃ СЃРµСЂРІРµСЂРѕРј
+static int running = 1;     // Р¤Р»Р°Рі СЂР°Р±РѕС‚С‹ РєР»РёРµРЅС‚Р° (0 = РІС‹С…РѕРґ)
+static WINDOW* chat_win, * input_win, * help_win;   // РћРєРЅР° ncurses: С‡Р°С‚, РїРѕР»Рµ РІРІРѕРґР°, СЃС‚СЂРѕРєР° РїРѕРґСЃРєР°Р·РєРё
+// РљРѕР»СЊС†РµРІРѕР№ Р±СѓС„РµСЂ СЃРѕРѕР±С‰РµРЅРёР№ РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ
+static char messages[MAX_MSG][MSG_LEN];
+static int msg_count = 0;            // РљРѕР»РёС‡РµСЃС‚РІРѕ СЃРѕРѕР±С‰РµРЅРёР№
+static int selected_msg = -1;        // Р

@@ -1,0 +1,12 @@
+#include "crypto.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+
+static unsigned char key[16];  // AES-128 РєР»СЋС‡ (16 Р±Р°Р№С‚) 
+static unsigned char iv[16];   // Р’РµРєС‚РѕСЂ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё 
+static int initialized = 0;      // Р¤Р»Р°Рі: РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°РЅ Р»Рё РјРѕРґСѓР»СЊ
+
+// Р
